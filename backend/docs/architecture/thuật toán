@@ -1,0 +1,173 @@
+Bước 1: Nhận dữ liệu đầu vào
+- Khoảng ngày cần tạo suất chiếu: fromDate, toDate.
+- Danh sách phim được chọn, nếu không chọn thì lấy tất cả phim hợp lệ.
+- Danh sách phòng được chọn, nếu không chọn thì lấy tất cả phòng ACTIVE.
+- Giờ mở cửa.
+- Giờ kết thúc lịch.
+- Thời gian nghỉ giữa các suất.
+- Giá vé gốc.
+- Số suất tối đa của mỗi phim trong một ngày.
+- Rule độ tuổi nếu có bật.
+- Cấu hình có cho phép cùng một phim chiếu cùng giờ ở nhiều phòng hay không.
+
+Bước 2: Validate dữ liệu đầu vào
+- Ngày bắt đầu không được ở quá khứ.
+- Ngày kết thúc không được trước ngày bắt đầu.
+- Khoảng ngày tạo tự động không được vượt quá giới hạn cho phép.
+- Giá vé phải hợp lệ.
+- Thời gian nghỉ giữa suất phải hợp lệ.
+- Giờ mở cửa và giờ kết thúc không được trùng nhau.
+
+Bước 3: Lấy dữ liệu nền
+- Lấy danh sách phim hợp lệ:
+  + Phim không bị INACTIVE.
+  + Phim không bị ENDED.
+  + Phim có thời lượng.
+  + Phim có định dạng chiếu.
+  + Ngày chiếu nằm trong khoảng phát hành hợp lệ của phim.
+
+- Lấy danh sách phòng hợp lệ:
+  + Phòng có trạng thái ACTIVE.
+  + Phòng hỗ trợ định dạng của ít nhất một phim hợp lệ.
+
+- Lấy các suất chiếu đã tồn tại trong database để tránh trùng lịch.
+
+Bước 4: Duyệt từng ngày trong khoảng tạo lịch
+Với mỗi ngày từ fromDate đến toDate:
+
+- Khởi tạo bộ đếm số suất của từng phim trong ngày.
+- Nạp các suất chiếu đã có trong ngày vào bộ đếm này.
+- Nạp các mốc giờ đã có phim chiếu để kiểm tra rule trùng giờ.
+
+Bước 5: Duyệt từng phòng chiếu
+Với mỗi phòng ACTIVE:
+
+- Xác định giờ bắt đầu trong ngày, ví dụ 08:00.
+- Xác định giờ kết thúc lịch, ví dụ trước 02:00 sáng hôm sau.
+- Lấy danh sách các khoảng thời gian phòng đã bị chiếm bởi suất chiếu cũ.
+- Cộng thêm thời gian nghỉ giữa suất vào cuối mỗi khoảng đã chiếm.
+
+Bước 6: Tìm khoảng trống trong phòng
+Trong từng phòng, hệ thống di chuyển con trỏ thời gian từ giờ mở cửa đến giờ kết thúc lịch.
+
+Ở mỗi vị trí thời gian:
+- Nếu con trỏ đang nằm trong một suất chiếu đã có, nhảy qua sau suất đó.
+- Nếu có khoảng trống trước suất chiếu kế tiếp, thử xếp phim vào khoảng trống đó.
+- Nếu không còn khoảng trống phù hợp, chuyển sang phòng tiếp theo.
+
+Bước 7: Thử nhiều mốc giờ trong khoảng trống
+Trong mỗi khoảng trống, hệ thống không chỉ thử đúng thời điểm bắt đầu khoảng trống.
+
+Ví dụ khoảng trống là 08:00 đến 12:00, bước thử giờ là 5 phút:
+- Thử 08:00.
+- Thử 08:05.
+- Thử 08:10.
+- ...
+- Cho tới khi tìm được phim phù hợp hoặc hết khoảng trống.
+
+Bước 8: Chọn phim phù hợp cho mốc giờ
+Với mỗi mốc giờ đang thử, hệ thống duyệt danh sách phim theo độ ưu tiên:
+
+- Phim hot hoặc nổi bật được ưu tiên hơn.
+- Phim có rating cao hơn được ưu tiên hơn.
+- Phim có ít suất hơn trong ngày được ưu tiên để phân bổ đều.
+- Phim phải còn trong ngày được phép chiếu.
+- Phòng phải hỗ trợ định dạng của phim.
+- Thời lượng phim phải vừa với khoảng trống.
+- Số suất của phim trong ngày chưa vượt quá giới hạn.
+- Nếu không cho phép cùng phim trùng giờ, phim đó không được đang chiếu cùng mốc giờ ở phòng khác.
+- Nếu bật rule độ tuổi, mốc giờ phải nằm trong khung giờ phù hợp với độ tuổi của phim.
+
+Bước 9: Tạo suất chiếu tạm trong preview
+Nếu tìm được phim phù hợp:
+
+- Tạo một suất chiếu tạm gồm:
+  + movieId
+  + cinemaRoomId
+  + showDate
+  + startTime
+  + endTime
+  + basePrice
+  + status = SCHEDULED
+
+- Thêm suất này vào danh sách preview.
+- Cập nhật bộ đếm số suất của phim trong ngày.
+- Cập nhật mốc giờ đã dùng.
+- Đánh dấu khoảng thời gian phòng bị chiếm.
+- Dời con trỏ thời gian tới sau giờ kết thúc phim cộng thời gian nghỉ giữa suất.
+
+Bước 10: Ghi nhận lý do bỏ qua
+Nếu không thể tạo suất trong một phòng hoặc một khoảng giờ, hệ thống ghi lại lý do, ví dụ:
+
+- Không có phim hợp lệ.
+- Phòng không hỗ trợ định dạng phim.
+- Phim đã vượt số suất tối đa trong ngày.
+- Không đủ thời lượng trong khoảng trống.
+- Không phù hợp rule độ tuổi.
+- Bị trùng lịch với suất chiếu đã có.
+
+Bước 11: Trả về preview
+Sau khi duyệt hết ngày, phòng và khoảng giờ, hệ thống trả về:
+
+- Danh sách suất chiếu dự kiến tạo.
+- Tổng số suất dự kiến.
+- Thống kê theo phim.
+- Thống kê theo phòng.
+- Thống kê theo ngày.
+- Số lượt phòng/ngày bị bỏ qua.
+- Danh sách cảnh báo hoặc lý do bỏ qua.
+
+Bước 12: Lưu draft
+Preview được lưu dưới dạng draft.
+
+Draft này chưa phải suất chiếu thật, chỉ là bản nháp để admin xem trước.
+
+Bước 13: Admin xác nhận
+Nếu admin bấm xác nhận:
+
+- Hệ thống đọc lại draft.
+- Kiểm tra draft còn hiệu lực.
+- Tạo suất chiếu thật từ danh sách trong draft.
+- Lưu vào database.
+- Tự động tạo ghế cho từng suất chiếu.
+- Đổi trạng thái draft thành CONFIRMED.
+
+Nếu admin không xác nhận hoặc draft hết hạn, lịch preview sẽ không được tạo thật.
+
+
+
+Demo
+
+Tính năng tạo suất chiếu tự động giúp admin không cần nhập từng suất chiếu thủ công.
+
+Đầu tiên, hệ thống cho phép admin chọn khoảng ngày muốn tạo lịch chiếu, chọn phim,
+
+ chọn phòng chiếu, giờ mở cửa, giờ kết thúc lịch, thời gian nghỉ giữa các suất và giá vé gốc.
+
+Sau đó, hệ thống sẽ đọc danh sách phim hợp lệ, bao gồm các phim đang chiếu hoặc sắp chiếu,
+
+có thời lượng, có định dạng phim và chưa bị vô hiệu hóa. Đồng thời, hệ thống cũng đọc danh sách
+
+phòng chiếu đang hoạt động và kiểm tra phòng đó có hỗ trợ định dạng của phim hay không.
+
+Khi admin bấm xem trước, hệ thống chưa lưu suất chiếu thật ngay. Thay vào đó, hệ thống sẽ tạo một
+
+ bản preview dựa trên các rule đã cấu hình.
+
+Trong quá trình tạo preview, hệ thống sẽ kiểm tra các điều kiện quan trọng:
+- Không tạo suất chiếu vào ngày không hợp lệ.
+- Không tạo lịch trùng với suất chiếu đã có.
+- Tính cả các suất chiếu đã tồn tại trong database vào giới hạn số suất mỗi phim trong ngày.
+- Thử nhiều mốc giờ trong khoảng trống, không chỉ lấy đúng giờ bắt đầu.
+- Đảm bảo thời lượng suất chiếu đủ cho thời lượng phim.
+- Đảm bảo phòng chiếu hỗ trợ đúng định dạng phim như 2D, 3D, IMAX hoặc 4DX.
+- Có thể áp dụng rule theo độ tuổi, ví dụ phim giới hạn tuổi cao sẽ được ưu tiên vào khung giờ phù hợp hơn.
+- Có thể cấu hình có cho phép cùng một phim chiếu cùng giờ ở nhiều phòng hay không.
+
+Sau khi preview xong, hệ thống hiển thị thống kê chi tiết cho admin, bao gồm số suất dự kiến tạo, số phòng được dùng, số phim hợp lệ, số suất bị bỏ qua và lý do bỏ qua.
+
+Nếu admin thấy lịch phù hợp, admin bấm xác nhận. Lúc này hệ thống mới chuyển bản draft thành các suất chiếu thật trong database.
+
+Khi suất chiếu được tạo thành công, hệ thống tự động tạo danh sách ghế tương ứng cho từng suất chiếu, giúp khách hàng có thể đặt vé ngay khi lịch chiếu được mở bán.
+
+Nhờ flow preview trước, confirm sau, admin có thể kiểm soát lịch chiếu trước khi lưu thật, hạn chế lỗi trùng lịch hoặc tạo sai suất chiếu.

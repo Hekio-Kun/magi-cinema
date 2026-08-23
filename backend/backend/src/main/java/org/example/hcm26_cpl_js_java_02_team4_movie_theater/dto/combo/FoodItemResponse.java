@@ -1,0 +1,30 @@
+package org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.combo;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+import java.util.List;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class FoodItemResponse {
+    Long foodItemId;
+    String name;
+    Long price;
+    String imageUrl;
+    String category;
+    @JsonProperty("isActive")
+    @JsonAlias("active")
+    boolean isActive;
+    List<FoodVariantResponse> variants;
+    Integer totalStockQuantity;
+    Long inventoryCost;
+    Long actualRevenue;
+    Long potentialRevenue;
+    Long potentialProfit;
+}

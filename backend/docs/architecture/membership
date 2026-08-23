@@ -1,0 +1,108 @@
+2.
+Backend API
+Làm theo thứ tự:
+•
+API lấy danh sách gói hội viên đang hoạt động.
+•
+API khách hàng đăng ký gói hội viên.
+•
+API tạo thanh toán MoMo cho gói hội viên.
+•
+API xử lý MoMo return/IPN cho membership.
+•
+API lấy trạng thái hội viên hiện tại của user.
+•
+API admin quản lý gói hội viên.
+3.
+Logic nghiệp vụ
+Quy tắc thực tế nên dùng:
+•
+Một khách hàng chỉ có một gói hội viên ACTIVE tại một thời điểm.
+•
+Nếu mua gói khi đang còn hạn thì cộng dồn ngày vào end_date.
+•
+Nếu hết hạn thì tạo/gia hạn từ ngày thanh toán thành công.
+•
+Chỉ kích hoạt hội viên sau khi thanh toán thành công.
+•
+Nếu thanh toán thất bại/hủy thì membership ở trạng thái CANCELLED hoặc không active.
+•
+Cron/job kiểm tra hội viên hết hạn và chuyển sang EXPIRED.
+4.
+Tích hợp ưu đãi
+Sau khi membership hoạt động ổn, mới áp dụng quyền lợi:
+•
+Giảm giá vé theo discount_percent.
+•
+Có thể giảm giá combo sau.
+•
+Hiển thị badge hội viên trên profile/header.
+•
+Booking page tự tính giảm giá nếu user có membership active.
+5.
+Frontend khách hàng
+Làm các màn hình:
+•
+Trang giới thiệu gói hội viên.
+•
+Danh sách gói: tháng/quý/năm.
+•
+Nút đăng ký/gia hạn.
+•
+Trang xử lý kết quả thanh toán.
+•
+Profile hiển thị:
+◦
+Gói hiện tại.
+◦
+Ngày hết hạn.
+◦
+Trạng thái hội viên.
+◦
+Quyền lợi đang có.
+6.
+Frontend admin
+Thêm trang quản lý hội viên:
+•
+CRUD gói hội viên.
+•
+Bật/tắt gói.
+•
+Xem danh sách khách hàng hội viên.
+•
+Lọc theo ACTIVE, EXPIRED, CANCELLED.
+•
+Xem lịch sử thanh toán membership.
+7.
+Thứ tự triển khai hợp lý
+Giai đoạn 1:
+•
+Tạo database entity.
+•
+API danh sách gói.
+•
+API đăng ký gói.
+•
+API xem membership hiện tại.
+Giai đoạn 2:
+•
+Tích hợp thanh toán MoMo cho membership.
+•
+Xử lý return/IPN.
+•
+Kích hoạt membership sau thanh toán.
+Giai đoạn 3:
+•
+Frontend trang mua gói.
+•
+Profile hiển thị hội viên.
+•
+Admin quản lý gói.
+Giai đoạn 4:
+•
+Áp dụng giảm giá khi booking vé.
+•
+Tự động hết hạn membership.
+•
+Notification/email khi sắp hết hạn.
+Cách này thực tế nhất vì không làm vỡ luồng booking hiện tại và vẫn tận dụng được nền tảng MoMo, user, dashboard bạn đã có.

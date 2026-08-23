@@ -1,0 +1,66 @@
+# ==========================================
+# 1. HỆ ĐIỀU HÀNH & HỆ THỐNG
+# ==========================================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+
+# ==========================================
+# 2. VITE / FRONTEND (NODE.JS)
+# ==========================================
+/frontend/node_modules/
+/frontend/dist/
+/frontend/dist-ssr/
+/frontend/*.local
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+/frontend/pnpm-debug.log*
+/frontend/lerna-debug.log*
+/frontend/*.tsbuildinfo
+
+# ==========================================
+# 3. JAVA / MAVEN / GRADLE
+# ==========================================
+/backend/target/
+/backend/build/
+/backend/.gradle/
+/backend/.settings/
+/backend/.classpath
+/backend/.project
+/backend/.factorypath
+/backend/.springBeans
+/backend/.sts4-cache/
+/backend/.apt_generated/
+/backend/.mvn/wrapper/maven-wrapper.jar
+# Ngoại lệ cho cấu trúc dự án đặc thù nếu cần (giữ nguyên logic bạn đã có)
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ==========================================
+# 4. EDITOR & IDE (VS Code, IntelliJ, NetBeans)
+# ==========================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.iml
+*.iws
+*.ipr
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+/nbproject/private/
+/nbbuild/
+/nbdist/
+/.nb-gradle/
+
+# ==========================================
+# 5. KHÁC
+# ==========================================
+HELP.md

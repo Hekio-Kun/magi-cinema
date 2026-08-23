@@ -1,0 +1,50 @@
+Cách hoạt động hiện tại của ghi log là:
+Khi admin/manager thao tác trong trang Combo & Bắp nước, backend sẽ xử lý nghiệp vụ trước. Nếu thao tác thành công thì service mới ghi thêm một bản ghi vào bảng combo_audit_log.
+Các thao tác đang được ghi:
+•
+Tạo combo.
+•
+Cập nhật combo.
+•
+Vô hiệu hóa combo.
+•
+Tạo món lẻ.
+•
+Cập nhật món lẻ.
+•
+Khôi phục món lẻ.
+•
+Vô hiệu hóa món lẻ.
+•
+Điều chỉnh tồn kho món lẻ.
+Mỗi log lưu các thông tin chính:
+•
+targetType: loại đối tượng, ví dụ COMBO, FOOD_ITEM.
+•
+targetId: id của combo hoặc món lẻ.
+•
+targetName: tên tại thời điểm thao tác.
+•
+action: loại thao tác, ví dụ CREATE, UPDATE, STOCK_ADJUST, DISABLE, RESTORE.
+•
+summary: mô tả ngắn thao tác.
+•
+actorUsername: người thực hiện, lấy từ JWT đang đăng nhập.
+•
+reason: lý do, chủ yếu dùng khi giảm tồn kho.
+•
+beforeSnapshot: dữ liệu trước khi sửa.
+•
+afterSnapshot: dữ liệu sau khi sửa.
+•
+createdAt: thời điểm ghi log.
+Ví dụ: nếu bạn sửa số lượng bắp từ 300 xuống 150 và nhập lý do “kiểm kê lại”, backend sẽ:
+1.
+Kiểm tra có lý do giảm tồn kho chưa.
+2.
+Cập nhật số lượng tồn kho.
+3.
+Vì số lượng từ >= 200 xuống dưới 200, tạo thông báo nhập kho trên dashboard.
+4.
+Ghi audit log với action STOCK_ADJUST, có dữ liệu trước/sau và lý do “kiểm kê lại”.
+Trang Lịch sử chỉ đọc từ bảng log này để hiển thị lại, không tự tạo log ở frontend.
