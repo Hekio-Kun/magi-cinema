@@ -29,11 +29,14 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nimbusds.jwt.SignedJWT;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -218,6 +221,7 @@ public class SecurityConfig {
                                 writeErrorResponse(response, ErrorCode.ACCESS_DENIED))
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver())
                         .jwt(jwt -> jwt.decoder(jwtDecoder()).jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 );
 
@@ -248,6 +252,50 @@ public class SecurityConfig {
         var jwtAuthenticationConverter = new JwtAuthenticationConverter();
         jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(jwtGrantedAuthoritiesConverter);
         return jwtAuthenticationConverter;
+    }
+
+    @Bean
+    public BearerTokenResolver bearerTokenResolver() {
+        var defaultResolver = new DefaultBearerTokenResolver();
+        return request -> {
+            String token = defaultResolver.resolve(request);
+            if (token == null) {
+                return null;
+            }
+            // Đối với các GET endpoint công khai (dành cho khách vãng lai duyệt danh mục phim, lịch chiếu, khuyến mãi...),
+            // nếu token gửi lên đã hết hạn hoặc không đúng định dạng, bỏ qua token để request được tiếp tục như khách vãng lai
+            // thay vì chặn lại và trả về lỗi 401 làm giao diện bị treo.
+            if ("GET".equalsIgnoreCase(request.getMethod()) && isPublicGetPath(request.getRequestURI())) {
+                try {
+                    var signedJWT = SignedJWT.parse(token);
+                    var exp = signedJWT.getJWTClaimsSet().getExpirationTime();
+                    if (exp != null && exp.before(new java.util.Date())) {
+                        log.debug("Bỏ qua token đã hết hạn trên public endpoint GET {}.", request.getRequestURI());
+                        return null;
+                    }
+                } catch (Exception e) {
+                    log.debug("Bỏ qua token không hợp lệ trên public endpoint GET {}.", request.getRequestURI());
+                    return null;
+                }
+            }
+            return token;
+        };
+    }
+
+    private boolean isPublicGetPath(String uri) {
+        if (uri == null) return false;
+        return uri.startsWith("/movies")
+                || uri.startsWith("/promotions")
+                || uri.startsWith("/combos")
+                || uri.startsWith("/food-items")
+                || uri.startsWith("/genres")
+                || uri.startsWith("/showtimes")
+                || uri.startsWith("/showtime-seats")
+                || uri.startsWith("/ticket-pricing/public")
+                || uri.startsWith("/memberships/plans")
+                || uri.startsWith("/swagger-ui")
+                || uri.startsWith("/v3/api-docs")
+                || uri.startsWith("/ws");
     }
 
     @Bean

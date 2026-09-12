@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getAuthToken } from '@/utils/authSession';
+import { getAuthToken, clearAuthToken } from '@/utils/authSession';
 
 const DEFAULT_API_URL = 'http://localhost:8080';
 export const API_BASE_URL = import.meta.env.VITE_API_URL?.trim() || DEFAULT_API_URL;
@@ -51,7 +51,12 @@ apiClient.interceptors.response.use(
         }
         return response;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        if (error.response?.status === 401) {
+            clearAuthToken();
+        }
+        return Promise.reject(error);
+    }
 );
 
 export default apiClient;

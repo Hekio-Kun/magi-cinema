@@ -1,3 +1,5 @@
+import { isTokenExpired } from "./index";
+
 export const AUTH_CHANGE_EVENT = "auth-change";
 
 const TOKEN_KEY = "jwt_token";
@@ -12,7 +14,17 @@ function normalizeStoredToken(value: string | null): string | null {
 }
 
 export function getAuthToken(): string | null {
-  return normalizeStoredToken(localStorage.getItem(TOKEN_KEY));
+  const token = normalizeStoredToken(localStorage.getItem(TOKEN_KEY));
+  if (!token) {
+    return null;
+  }
+  if (isTokenExpired(token)) {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("username");
+    localStorage.removeItem("user_avatar");
+    return null;
+  }
+  return token;
 }
 
 export function setAuthToken(token: string): void {
@@ -26,6 +38,8 @@ export function setAuthToken(token: string): void {
 
 export function clearAuthToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem("username");
+  localStorage.removeItem("user_avatar");
   notifyAuthChange();
 }
 
