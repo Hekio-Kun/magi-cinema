@@ -17,14 +17,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.security.SecureRandom;
+import java.util.Locale;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PasswordResetService {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     UserRepository userRepository;
     PasswordResetTokenRepository passwordResetTokenRepository;
@@ -37,12 +40,12 @@ public class PasswordResetService {
 
     @Transactional
     public void handleForgotPassword(String email) {
-        Optional<User> userOptional = userRepository.findByEmail(email.trim().toLowerCase());
+        Optional<User> userOptional = userRepository.findByEmail(email.trim().toLowerCase(Locale.ROOT));
 
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             // Generate a 6-digit OTP
-            String token = String.format("%06d", new java.util.Random().nextInt(1000000));
+            String token = String.format(Locale.ROOT, "%06d", SECURE_RANDOM.nextInt(1_000_000));
             PasswordResetToken resetToken = passwordResetTokenRepository.findByUser(user).orElseGet(PasswordResetToken::new);
             resetToken.setToken(token);
             resetToken.setUser(user);

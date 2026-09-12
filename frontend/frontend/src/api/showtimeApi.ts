@@ -266,11 +266,11 @@ export const showtimeApi = {
     };
   },
 
-  updateAutoShowtimeConfig: async (config: any) => {
+  updateAutoShowtimeConfig: async (config: unknown) => {
     return config;
   },
 
-  previewAutoGenerateShowtimes: async (data: any) => {
+  previewAutoGenerateShowtimes: async (data: unknown) => {
     const res = await apiClient.post('/showtimes/admin/auto-generate/preview', data);
     return res.data.result;
   },

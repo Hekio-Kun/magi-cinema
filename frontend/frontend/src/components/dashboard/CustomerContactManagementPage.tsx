@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   MessageSquare, 
   Mail, 
-  User, 
   Calendar, 
   CheckCircle2, 
   AlertTriangle, 
@@ -16,17 +15,18 @@ import {
   ShieldAlert, 
   Clock, 
   MessageCircle,
-  ChevronDown,
-  ChevronUp,
   Trash2
 } from "lucide-react";
 import { contactApi, ContactResponse } from "@/api/contactApi";
+import { getApiErrorMessage } from "@/api/errors";
+
+type ContactFilterStatus = "ALL" | "RECEIVED" | "REPLIED" | "FLAGGED";
 
 export function CustomerContactManagementPage() {
   const [contacts, setContacts] = useState<ContactResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"ALL" | "RECEIVED" | "REPLIED" | "FLAGGED">("ALL");
+  const [filterStatus, setFilterStatus] = useState<ContactFilterStatus>("ALL");
 
   // State to track which cards are currently showing raw unmasked text
   const [showRawTextMap, setShowRawTextMap] = useState<Record<number, boolean>>({});
@@ -51,8 +51,19 @@ export function CustomerContactManagementPage() {
   };
 
   useEffect(() => {
-    fetchContacts();
+    let active = true;
+    contactApi.getAdminList()
+      .then((data) => { if (active) setContacts(data); })
+      .catch((err) => { if (active) console.error("Failed to fetch contacts", err); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!notification) return;
+    const timer = window.setTimeout(() => setNotification(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notification]);
 
   const toggleShowRawText = (id: number) => {
     setShowRawTextMap((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -109,9 +120,8 @@ export function CustomerContactManagementPage() {
       setContacts((prev) => prev.map((item) => item.contactId === updated.contactId ? updated : item));
       setNotification({ type: "success", text: `Đã gửi email phản hồi thành công đến ${replyingItem.senderEmail}!` });
       handleCloseReplyModal();
-      setTimeout(() => setNotification(null), 4000);
-    } catch (err: any) {
-      setReplyError(err?.response?.data?.message || "Lỗi khi gửi email phản hồi. Kiểm tra lại kết nối mail server.");
+    } catch (err: unknown) {
+      setReplyError(getApiErrorMessage(err, "Lỗi khi gửi email phản hồi. Kiểm tra lại kết nối mail server."));
     } finally {
       setSubmittingReply(false);
     }
@@ -125,10 +135,8 @@ export function CustomerContactManagementPage() {
       await contactApi.delete(contactId);
       setContacts((prev) => prev.filter((item) => item.contactId !== contactId));
       setNotification({ type: "success", text: "Đã xóa góp ý thành công!" });
-      setTimeout(() => setNotification(null), 4000);
-    } catch (err: any) {
-      setNotification({ type: "error", text: err?.response?.data?.message || "Lỗi khi xóa góp ý." });
-      setTimeout(() => setNotification(null), 4000);
+    } catch (err: unknown) {
+      setNotification({ type: "error", text: getApiErrorMessage(err, "Lỗi khi xóa góp ý.") });
     }
   };
 
@@ -235,7 +243,7 @@ export function CustomerContactManagementPage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setFilterStatus(tab.id as any)}
+                onClick={() => setFilterStatus(tab.id as ContactFilterStatus)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border-none ${
                   active 
                     ? "bg-slate-900 text-white shadow-xs" 

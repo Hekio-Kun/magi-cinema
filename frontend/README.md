@@ -96,10 +96,10 @@ npm run check
 Lệnh này chạy lần lượt:
 
 ```text
-typecheck → production build
+lint → typecheck → production build
 ```
 
-Lint được giữ thành một bước riêng để nhóm có thể xử lý dần các cảnh báo và rule React tồn đọng mà không chặn việc xác nhận ứng dụng có thể biên dịch:
+Có thể chạy từng bước để xác định lỗi. Lint error chặn `check`; warning vẫn cần được rà soát:
 
 ```bash
 npm run typecheck
@@ -122,7 +122,8 @@ docker build --build-arg VITE_API_URL=https://api.example.com -t movie-theater-f
 docker run --rm -p 3000:80 movie-theater-frontend
 ```
 
-Docker dùng Node `22.13`, `npm ci` và chạy toàn bộ `npm run check` trước khi tạo image.
+Docker dùng Node `22-alpine`, `npm ci`, `npm run typecheck` và `npm run build` trước khi tạo image. Chạy lint riêng trước khi build Docker.
+`VITE_API_URL` là build argument, mặc định `/api`; thay đổi biến này lúc chạy container không thay đổi bundle đã build.
 Nginx đã hỗ trợ refresh trực tiếp các route SPA như `/admin` hoặc `/movies/1`.
 
 Để chạy cả PostgreSQL, backend và frontend trong workspace hiện tại, đứng tại thư mục
@@ -131,6 +132,8 @@ repository frontend (thư mục chứa `docker-compose.yml`) rồi chạy:
 ```bash
 docker compose up --build
 ```
+
+Tạo `../backend/.env` từ `../backend/.env.example` trước lần chạy đầu và điền JWT signer key cùng thông tin dịch vụ cần sử dụng. Compose này đọc file env đó cho backend. Hướng dẫn đầy đủ cho monorepo và volume có sẵn ở [README gốc](../README.md).
 
 Compose build frontend với `VITE_API_URL=/api`; Nginx chuyển tiếp REST API và WebSocket
 sang service backend. Cấu trúc workspace cần đặt hai repository `frontend` và `backend`

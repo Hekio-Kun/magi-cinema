@@ -30,7 +30,7 @@ function HeaderContent({ pathname }: { pathname: string }) {
     && !user.roles.some((role) => role === "ADMIN" || role === "MANAGER" || role === "STAFF");
 
   // New States for UI improvements
-  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [isDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchState, setSearchState] = useState<{ keyword: string; results: MovieResponse[] }>({

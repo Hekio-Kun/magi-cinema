@@ -23,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.UserStatus;
@@ -50,7 +51,7 @@ public class AuthenticationService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     public void initiateRegistration(RegisterRequest request) {
-        String emailKey = request.getEmail().trim().toLowerCase();
+        String emailKey = request.getEmail().trim().toLowerCase(Locale.ROOT);
 
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new AppException(ErrorCode.USER_EXISTED);
@@ -77,13 +78,13 @@ public class AuthenticationService {
         if (userRepository.existsByUsername(username)) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
-        if (userRepository.existsByEmail(email.trim().toLowerCase())) {
+        if (userRepository.existsByEmail(email.trim().toLowerCase(Locale.ROOT))) {
             throw new AppException(ErrorCode.EMAIL_EXISTED);
         }
     }
 
     public void resendOtp(ResendOtpRequest request) {
-        String emailKey = request.getEmail().trim().toLowerCase();
+        String emailKey = request.getEmail().trim().toLowerCase(Locale.ROOT);
 
         if (userRepository.existsByEmail(emailKey)) {
             throw new AppException(ErrorCode.EMAIL_EXISTED);
@@ -105,18 +106,16 @@ public class AuthenticationService {
     @Transactional
     public UserResponse verifyOtpAndRegister(VerifyOtpRequest request) {
         RegisterRequest registerRequest = request.getRegisterRequest();
-        String emailKey = registerRequest.getEmail().trim().toLowerCase();
+        String emailKey = registerRequest.getEmail().trim().toLowerCase(Locale.ROOT);
         String inputOtp = request.getOtp() != null ? request.getOtp().trim() : "";
 
-        String cachedOtp = otpStore.get(emailKey);
-        if (cachedOtp == null) {
+        OtpStore.ConsumeResult otpResult = otpStore.consume(emailKey, inputOtp);
+        if (otpResult == OtpStore.ConsumeResult.EXPIRED) {
             throw new AppException(ErrorCode.OTP_EXPIRED);
         }
-        if (!cachedOtp.equals(inputOtp)) {
+        if (otpResult == OtpStore.ConsumeResult.INVALID) {
             throw new AppException(ErrorCode.OTP_INVALID);
         }
-
-        otpStore.delete(emailKey);
 
         if (userRepository.existsByUsername(registerRequest.getUsername())) {
             throw new AppException(ErrorCode.USER_EXISTED);
@@ -127,8 +126,15 @@ public class AuthenticationService {
         if (userProfileRepository.existsByPhoneNumber(registerRequest.getPhoneNumber().trim())) {
             throw new AppException(ErrorCode.PHONE_EXISTED);
         }
+        String identityCard = registerRequest.getIdentityCard() == null
+                ? null : registerRequest.getIdentityCard().trim();
+        if (identityCard != null && !identityCard.isBlank()
+                && userProfileRepository.existsByIdentityCard(identityCard)) {
+            throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+        }
 
         User user = userMapper.toUser(registerRequest);
+        user.setEmail(emailKey);
         user.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
         user.setStatus(UserStatus.ACTIVE);
 
@@ -148,7 +154,7 @@ public class AuthenticationService {
                 .dateOfBirthUpdatedAt(registerRequest.getDateOfBirth() == null ? null : LocalDateTime.now())
                 .gender(registerRequest.getGender())
                 .address(registerRequest.getAddress())
-                .identityCard(registerRequest.getIdentityCard())
+                .identityCard(identityCard == null || identityCard.isBlank() ? null : identityCard)
                 .email(emailKey)
                 .isActive(true)
                 .loyaltyPoints(0)
@@ -188,6 +194,6 @@ public class AuthenticationService {
     }
 
     private String generateOtp() {
-        return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+        return String.format(Locale.ROOT, "%06d", SECURE_RANDOM.nextInt(1_000_000));
     }
 }

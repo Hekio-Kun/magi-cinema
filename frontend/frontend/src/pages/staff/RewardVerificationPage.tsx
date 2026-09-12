@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { CheckCircle2, Gift, Loader2, XCircle } from "lucide-react";
 import { membershipApi } from "@/api/membershipApi";
 import type { MembershipRewardRedemption } from "@/api/membershipApi";
+import { getApiErrorMessage } from "@/api/errors";
 
 const date = (value?: string) => value ? new Date(value).toLocaleDateString("vi-VN") : "—";
 
@@ -20,9 +21,8 @@ export default function RewardVerificationPage() {
       const data = await membershipApi.claimGiftAtCounter(code);
       setReward(data);
       setSuccess(true);
-    } catch (requestError: any) {
-      const message = requestError?.response?.data?.message || "Mã quà tặng không hợp lệ, đã hết hạn hoặc đã được sử dụng.";
-      setError(message);
+    } catch (requestError: unknown) {
+      setError(getApiErrorMessage(requestError, "Mã quà tặng không hợp lệ, đã hết hạn hoặc đã được sử dụng."));
     } finally {
       setLoading(false);
     }

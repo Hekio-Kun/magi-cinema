@@ -95,7 +95,6 @@ export function SeatMap({
                           : 'AVAILABLE';
 
                     const isAvailable = (combinedStatus === 'AVAILABLE' || isSelected) && !disabled;
-                    const isVIP = seat.seatType === 'VIP';
                     const typeLabel = seatTypeLabel[seat.seatType || 'NORMAL'] || seat.seatType || 'Ghế';
                     const statusLabel =
                       combinedStatus === 'SELECTED'

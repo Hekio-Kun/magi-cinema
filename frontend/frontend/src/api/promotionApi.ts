@@ -59,6 +59,7 @@ export interface PromotionCatalogResponse {
   dailyStartTime?: string;
   dailyEndTime?: string;
   eligibleMemberTiers?: string[];
+  walletPaymentMethod?: PaymentMethod;
 }
 
 export interface PromotionEvaluation {

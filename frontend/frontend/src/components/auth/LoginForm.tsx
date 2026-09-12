@@ -5,7 +5,7 @@ import { authService } from "@/api/authApi";
 import { userService } from "@/api/userApi";
 import { getTokenRoles } from "@/utils/index";
 import { canAccessDashboardFromScopes } from "@/utils/dashboardAccess";
-import { notifyAuthChange, setAuthToken } from "@/utils/authSession";
+import { getAuthToken, notifyAuthChange, setAuthToken } from "@/utils/authSession";
 
 interface LoginFormProps {
   onSwitch: () => void;
@@ -204,22 +204,10 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
 
       if (data.authenticated) {
         setSuccessMessage("Đăng nhập thành công! Đang chuyển hướng...");
-        setAuthToken(data.token);
         localStorage.setItem("username", username);
+        localStorage.removeItem("user_avatar");
+        setAuthToken(data.token);
         
-        try {
-          const profile = await userService.getMyProfile();
-          if (profile.avatarUrl) {
-            localStorage.setItem("user_avatar", profile.avatarUrl);
-          } else {
-            localStorage.removeItem("user_avatar");
-          }
-        } catch (err) {
-          console.error("Failed to fetch profile during login", err);
-        }
-
-        notifyAuthChange();
-
         const routeState = location.state as { from?: unknown } | null;
         const requestedPath =
           typeof routeState?.from === "string"
@@ -233,6 +221,19 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
           navigate("/admin", { replace: true });
         } else {
           navigate(requestedPath, { replace: true });
+        }
+
+        try {
+          const profile = await userService.getMyProfile();
+          if (getAuthToken() !== data.token) return;
+          if (profile.avatarUrl) {
+            localStorage.setItem("user_avatar", profile.avatarUrl);
+          } else {
+            localStorage.removeItem("user_avatar");
+          }
+          notifyAuthChange();
+        } catch (err) {
+          console.error("Failed to fetch profile during login", err);
         }
       } else {
         setErrorMessage("Đăng nhập không hợp lệ");

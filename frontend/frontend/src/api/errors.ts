@@ -15,7 +15,7 @@ function asNonEmptyString(value: unknown): string | null {
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
-  const apiError = error as ApiErrorLike;
+  const apiError = (error ?? {}) as ApiErrorLike;
   return (
     asNonEmptyString(apiError.response?.data?.message)
     ?? asNonEmptyString(apiError.message)

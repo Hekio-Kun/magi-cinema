@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Film, Send, MapPin, Phone, Mail, MessageSquare, ChevronRight, X, Award, HeartHandshake, Shield, FileText } from "lucide-react";
+import { Film, Send, MapPin, Phone, Mail, X, Award, HeartHandshake, Shield, FileText } from "lucide-react";
 import { FaInstagram, FaXTwitter, FaYoutube, FaFacebookF } from "react-icons/fa6";
 import { Link } from "react-router-dom";
 import { CustomerContactModal } from "@/components/common/CustomerContactModal";

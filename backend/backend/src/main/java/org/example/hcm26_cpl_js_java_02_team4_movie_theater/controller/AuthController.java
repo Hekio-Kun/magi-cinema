@@ -58,7 +58,7 @@ public class AuthController {
     }
 
     @PostMapping("/register/resend-otp")
-    public ApiResponse<Void> resendOtp(@RequestBody ResendOtpRequest request) {
+    public ApiResponse<Void> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
         authenticationService.resendOtp(request);
         return ApiResponse.<Void>builder()
                 .message("OTP mới đã được gửi đến email của bạn.")

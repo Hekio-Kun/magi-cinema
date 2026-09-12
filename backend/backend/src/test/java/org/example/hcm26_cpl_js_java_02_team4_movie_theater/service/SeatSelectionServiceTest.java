@@ -1,5 +1,6 @@
 package org.example.hcm26_cpl_js_java_02_team4_movie_theater.service;
 
+import jakarta.persistence.EntityManager;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.booking.SeatSelectionHoldRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.booking.SeatSelectionHoldResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.CinemaRoom;
@@ -53,6 +54,7 @@ class SeatSelectionServiceTest {
     @Mock ShowtimeSeatRepository showtimeSeatRepository;
     @Mock UserRepository userRepository;
     @Mock SeatRealtimeService seatRealtimeService;
+    @Mock EntityManager entityManager;
 
     @InjectMocks SeatSelectionService seatSelectionService;
 
@@ -103,6 +105,31 @@ class SeatSelectionServiceTest {
         assertTrue(seat.getSelectionHoldExpiresAt().isBefore(LocalDateTime.now().plusSeconds(181)));
         verify(showtimeSeatRepository).saveAll(List.of(seat));
         verify(seatRealtimeService).publishSeatStatusChangeAfterCommit(10L, List.of(seat));
+    }
+
+    @Test
+    void doesNotReacquireSeatConvertedIntoPendingBookingWhileWaitingForLock() {
+        ShowtimeSeat seat = seat(101L, "A1", ShowtimeSeatStatus.HOLDING);
+        seat.setSelectionHeldByUserId("user-1");
+        seat.setSelectionHoldToken("client-a");
+        seat.setSelectionHoldExpiresAt(LocalDateTime.now().plusMinutes(2));
+        when(showtimeSeatRepository
+                .findByShowtime_ShowtimeIdAndSelectionHeldByUserIdAndSelectionHoldToken(
+                        10L, "user-1", "client-a"))
+                .thenReturn(List.of(seat));
+        when(showtimeSeatRepository.findAllByIdForUpdate(anyCollection())).thenReturn(List.of(seat));
+        org.mockito.Mockito.doAnswer(call -> {
+            seat.setSelectionHeldByUserId(null);
+            seat.setSelectionHoldToken(null);
+            seat.setSelectionHoldExpiresAt(null);
+            return null;
+        }).when(entityManager).refresh(seat);
+
+        assertThrows(AppException.class, () -> seatSelectionService.updateSelection(request(List.of(101L), "client-a")));
+
+        assertEquals(ShowtimeSeatStatus.HOLDING, seat.getStatus());
+        assertNull(seat.getSelectionHeldByUserId());
+        verify(showtimeSeatRepository, never()).saveAll(anyList());
     }
 
     @Test

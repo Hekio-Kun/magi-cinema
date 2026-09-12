@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Bell, Package, UserPlus } from "lucide-react";
+import { Search, Bell, Package, UserPlus, AlertTriangle } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { notificationService, type DashboardNotification } from "@/api/notificationApi";
 import { DASHBOARD_PAGE_ACCESS, canAccessDashboardPage, normalizeRoles } from "@/utils/dashboardAccess";

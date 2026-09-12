@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Film, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { authService } from "@/api/authApi";
 import { getApiErrorMessage } from "@/api/errors";
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE, passwordRequirements } from "@/utils/passwordPolicy";

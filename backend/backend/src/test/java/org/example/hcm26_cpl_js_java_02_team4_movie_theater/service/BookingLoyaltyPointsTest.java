@@ -71,6 +71,7 @@ class BookingLoyaltyPointsTest {
     @Mock TransactionTemplate transactionTemplate;
     @Mock ShowtimeMapper showtimeMapper;
     @Mock MembershipService membershipService;
+    @Mock PromotionService promotionService;
 
     @InjectMocks BookingService bookingService;
 

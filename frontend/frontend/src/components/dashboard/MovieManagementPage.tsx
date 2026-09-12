@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { tmdbApi, type TmdbMovieResult } from "@/api/tmdbApi";
 import { getApiErrorMessage } from "@/api/errors";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import {
   Search, Plus, Film, Edit, PowerOff, Loader2, X,
   Eye, ChevronLeft, ChevronRight, RefreshCw,
@@ -254,6 +255,7 @@ const STEPS: Step[] = [
 
 /* --- Main Component --- */
 export function MovieManagementPage() {
+  const { startRequest, invalidateRequests } = useLatestRequest();
   const [movies, setMovies]         = useState<MovieResponse[]>([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState("");
@@ -306,6 +308,7 @@ export function MovieManagementPage() {
   }, []);
 
   const fetchMovies = useCallback(async (page = 0) => {
+    const isCurrent = startRequest();
     setLoading(true);
     try {
       const params: GetMoviesParams = { page, size: PAGE_SIZE };
@@ -322,21 +325,27 @@ export function MovieManagementPage() {
       if (direction) params.direction = direction;
       
       const data = await movieService.getMovies(params);
+      if (!isCurrent()) return;
       setMovies(data.content);
       setTotalPages(data.totalPages);
       setTotalElements(data.totalElements);
       setCurrentPage(data.page);
     } catch (err) {
+      if (!isCurrent()) return;
       console.error("Failed to fetch movies", err);
+      toast.error(getApiErrorMessage(err, "Không thể tải danh sách phim."));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [appliedSearch, statusFilter, genreFilter, searchDate, sortParam]);
+  }, [appliedSearch, statusFilter, genreFilter, searchDate, sortParam, startRequest]);
 
   useEffect(() => {
     const requestTimer = window.setTimeout(() => fetchMovies(0), 0);
-    return () => window.clearTimeout(requestTimer);
-  }, [fetchMovies]);
+    return () => {
+      window.clearTimeout(requestTimer);
+      invalidateRequests();
+    };
+  }, [fetchMovies, invalidateRequests]);
 
   const movieStats = useMemo(() => {
     const nowShowing = movies.filter((movie) => movie.status === "NOW_SHOWING").length;

@@ -17,7 +17,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.mapper.SeatMapper;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.CinemaRoomRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.SeatRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.validation.PageRequests;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -44,7 +44,7 @@ public class SeatService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_STAFF', 'ROLE_CUSTOMER')")
     public PageResponse<SeatResponse> getSeats(Long cinemaRoomId, SeatStatus status, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("seatRow").ascending().and(Sort.by("seatNumber").ascending()));
+        Pageable pageable = PageRequests.bounded(page, size, Sort.by("seatRow").ascending().and(Sort.by("seatNumber").ascending()));
         Page<Seat> seatPage;
 
         if (cinemaRoomId != null && status != null) {
@@ -59,9 +59,9 @@ public class SeatService {
 
         List<SeatResponse> responses = seatMapper.toSeatResponseList(seatPage.getContent());
         return PageResponse.<SeatResponse>builder()
-                .page(page)
+                .page(pageable.getPageNumber())
                 .totalPages(seatPage.getTotalPages())
-                .size(size)
+                .size(pageable.getPageSize())
                 .totalElements(seatPage.getTotalElements())
                 .content(responses)
                 .build();

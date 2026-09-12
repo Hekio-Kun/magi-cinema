@@ -46,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import jakarta.persistence.criteria.Join;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
@@ -89,6 +90,7 @@ public class BookingService {
     ShowtimeMapper showtimeMapper;
     TicketPricingService ticketPricingService;
     MembershipService membershipService;
+    EntityManager entityManager;
 
     private static final Set<ShowtimeStatus> UNBOOKABLE_SHOWTIME_STATUSES = Set.of(
             ShowtimeStatus.CANCELLED,
@@ -514,9 +516,9 @@ public class BookingService {
             int price = u22SeatIds.contains(sSeat.getShowtimeSeatId())
                     ? ticketPricingService.calculateConfiguredU22TicketPrice(showtime, sSeat.getSeat().getType())
                     : normalPrice;
-            totalAmount += price;
-            ticketSubtotal += price;
-            pointEligibleTicketSubtotal += price;
+            totalAmount = addBookingValue(totalAmount, price);
+            ticketSubtotal = addBookingValue(ticketSubtotal, price);
+            pointEligibleTicketSubtotal = addBookingValue(pointEligibleTicketSubtotal, price);
 
             Ticket ticket = Ticket.builder()
                     .booking(booking)
@@ -545,13 +547,13 @@ public class BookingService {
                         .booking(booking)
                         .combo(combo)
                         .quantity(cReq.getQuantity())
-                        .price(combo.getPrice() * cReq.getQuantity())
+                        .price((long) multiplyBookingValue(combo.getPrice(), cReq.getQuantity()))
                         .comboNameSnapshot(combo.getName())
                         .unitPriceSnapshot(combo.getPrice())
                         .build();
                 bookingCombos.add(bc);
-                totalAmount += bc.getPrice();
-                concessionSubtotal += bc.getPrice();
+                totalAmount = addBookingValue(totalAmount, bc.getPrice());
+                concessionSubtotal = addBookingValue(concessionSubtotal, bc.getPrice());
             }
             booking.setTotalAmount(totalAmount);
         }
@@ -568,11 +570,11 @@ public class BookingService {
                         .displayNameSnapshot(buildVariantDisplayName(variant))
                         .unitPriceSnapshot(variant.getPrice())
                         .quantity(itemRequest.getQuantity())
-                        .price(variant.getPrice() * itemRequest.getQuantity())
+                        .price((long) multiplyBookingValue(variant.getPrice(), itemRequest.getQuantity()))
                         .build();
                 bookingFoodItems.add(bookingFoodItem);
-                totalAmount += bookingFoodItem.getPrice();
-                concessionSubtotal += bookingFoodItem.getPrice();
+                totalAmount = addBookingValue(totalAmount, bookingFoodItem.getPrice());
+                concessionSubtotal = addBookingValue(concessionSubtotal, bookingFoodItem.getPrice());
             }
         }
 
@@ -1374,7 +1376,7 @@ public class BookingService {
             // Dùng getVariantMetaForStock (không lấy lock) — lock thật lấy tập hợp ở reserveFoodStock.
             FoodVariant variant = getVariantMetaForStock(configuredVariant.getFoodVariantId());
             int componentQuantity = comboItem.getQuantity() == null ? 1 : comboItem.getQuantity();
-            addStockRequirement(stockRequirements, variant, selectedComboQuantity * componentQuantity);
+            addStockRequirement(stockRequirements, variant, multiplyBookingValue(selectedComboQuantity, componentQuantity));
         }
     }
 
@@ -1402,7 +1404,7 @@ public class BookingService {
 
     private void addStockRequirement(Map<Long, StockRequirement> stockRequirements, FoodVariant variant, int quantity) {
         if (quantity <= 0) {
-            return;
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Số lượng món lẻ phải lớn hơn 0.");
         }
         Long variantId = variant.getFoodVariantId();
         StockRequirement existing = stockRequirements.get(variantId);
@@ -1410,7 +1412,23 @@ public class BookingService {
             stockRequirements.put(variantId, new StockRequirement(variant, quantity));
             return;
         }
-        stockRequirements.put(variantId, new StockRequirement(existing.variant(), existing.quantity() + quantity));
+        stockRequirements.put(variantId, new StockRequirement(existing.variant(), addBookingValue(existing.quantity(), quantity)));
+    }
+
+    private int addBookingValue(long left, long right) {
+        try {
+            return Math.toIntExact(Math.addExact(left, right));
+        } catch (ArithmeticException exception) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Tổng tiền hoặc số lượng đặt vé vượt giới hạn cho phép.");
+        }
+    }
+
+    private int multiplyBookingValue(long value, int quantity) {
+        try {
+            return Math.toIntExact(Math.multiplyExact(value, quantity));
+        } catch (ArithmeticException exception) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Tổng tiền hoặc số lượng đặt vé vượt giới hạn cho phép.");
+        }
     }
 
     private void reserveFoodStock(Booking booking, Map<Long, StockRequirement> stockRequirements) {
@@ -1437,6 +1455,8 @@ public class BookingService {
             if (variant == null) {
                 throw new AppException(ErrorCode.VALIDATION_ERROR, "Món lẻ không tồn tại (id=" + variantId + ")");
             }
+            // Metadata đã được đọc trước khi lấy khoá; nạp lại tồn kho sau khi chờ giao dịch khác.
+            entityManager.refresh(variant);
             int stock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
             if (stock < requirement.quantity()) {
                 notifyFoodStockReplenishmentNeeded(variant, stock, requirement.quantity());
@@ -1475,16 +1495,23 @@ public class BookingService {
     private void restoreFoodStock(Long bookingId) {
         List<BookingFoodStockReservation> reservations =
                 bookingFoodStockReservationRepository.findByBooking_BookingId(bookingId);
+        Map<Long, Integer> quantities = new LinkedHashMap<>();
         for (BookingFoodStockReservation reservation : reservations) {
             if (reservation.getFoodVariant() == null || reservation.getFoodVariant().getFoodVariantId() == null) {
                 continue;
             }
-            foodVariantRepository.findByFoodVariantId(reservation.getFoodVariant().getFoodVariantId())
-                    .ifPresent(variant -> {
-                        int stock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
-                        variant.setStockQuantity(stock + (reservation.getQuantity() == null ? 0 : reservation.getQuantity()));
-                        foodVariantRepository.save(variant);
-                    });
+            quantities.merge(reservation.getFoodVariant().getFoodVariantId(),
+                    reservation.getQuantity() == null ? 0 : reservation.getQuantity(), this::addBookingValue);
+        }
+        if (quantities.isEmpty()) {
+            return;
+        }
+        List<Long> sortedIds = quantities.keySet().stream().sorted().toList();
+        for (FoodVariant variant : foodVariantRepository.findAllByIdsSorted(sortedIds)) {
+            entityManager.refresh(variant);
+            int stock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+            variant.setStockQuantity(addBookingValue(stock, quantities.get(variant.getFoodVariantId())));
+            foodVariantRepository.save(variant);
         }
     }
 

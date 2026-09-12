@@ -30,10 +30,10 @@ public class PaymentService {
     }
 
     public PaymentReturnResult handleZaloPayReturn(Map<String, String> params) {
-        log.info("Received ZaloPay return: {}", params);
+        log.info("Received ZaloPay return");
 
         if (!zaloPayPaymentService.verifyReturnChecksum(params)) {
-            log.warn("Invalid ZaloPay return checksum: {}", params);
+            log.warn("Invalid ZaloPay return checksum");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Chữ ký thanh toán ZaloPay không hợp lệ");
         }
 
@@ -66,12 +66,12 @@ public class PaymentService {
     }
 
     public ZaloPayCallbackResponse handleZaloPayCallback(Map<String, Object> payload) {
-        log.info("Received ZaloPay callback: {}", payload);
+        log.info("Received ZaloPay callback");
 
         String data = valueOf(payload.get("data"));
         String mac = valueOf(payload.get("mac"));
         if (!zaloPayPaymentService.verifyCallbackSignature(data, mac)) {
-            log.warn("Invalid ZaloPay callback signature: {}", payload);
+            log.warn("Invalid ZaloPay callback signature");
             return callbackResponse(-1, "mac not equal");
         }
 
@@ -102,10 +102,10 @@ public class PaymentService {
     }
 
     public PaymentReturnResult handleMomoReturn(Map<String, String> params) {
-        log.info("Received MoMo return: {}", params);
+        log.info("Received MoMo return");
 
         if (!momoPaymentService.verifyCallbackSignature(params)) {
-            log.warn("Invalid MoMo return signature: {}", params);
+            log.warn("Invalid MoMo return signature");
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Chữ ký thanh toán MoMo không hợp lệ");
         }
 
@@ -135,11 +135,11 @@ public class PaymentService {
     }
 
     public void handleMomoIpn(Map<String, Object> payload) {
-        log.info("Received MoMo IPN: {}", payload);
+        log.info("Received MoMo IPN");
 
         Map<String, String> params = normalizePayload(payload);
         if (!momoPaymentService.verifyCallbackSignature(params)) {
-            log.warn("Invalid MoMo IPN signature: {}", payload);
+            log.warn("Invalid MoMo IPN signature");
             return;
         }
 
@@ -153,7 +153,7 @@ public class PaymentService {
             return;
         }
         if (bookingId == null) {
-            log.warn("Invalid MoMo IPN orderId: {}", payload);
+            log.warn("Invalid MoMo IPN orderId");
             return;
         }
 

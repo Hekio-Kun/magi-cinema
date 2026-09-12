@@ -19,7 +19,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.SeatRepos
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeSeatRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.validation.PageRequests;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -47,7 +47,7 @@ public class ShowtimeSeatService {
             ShowtimeSeatStatus status,
             int page,
             int size) {
-        Pageable pageable = PageRequest.of(page, size,
+        Pageable pageable = PageRequests.bounded(page, size,
                 Sort.by("seat.seatRow").ascending()
                         .and(Sort.by("seat.seatNumber").ascending())
                         .and(Sort.by("showtimeSeatId").ascending()));
@@ -74,9 +74,9 @@ public class ShowtimeSeatService {
 
         List<ShowtimeSeatResponse> responses = showtimeSeatMapper.toShowtimeSeatResponseList(showtimeSeatPage.getContent());
         return PageResponse.<ShowtimeSeatResponse>builder()
-                .page(page)
+                .page(pageable.getPageNumber())
                 .totalPages(showtimeSeatPage.getTotalPages())
-                .size(size)
+                .size(pageable.getPageSize())
                 .totalElements(showtimeSeatPage.getTotalElements())
                 .content(responses)
                 .build();

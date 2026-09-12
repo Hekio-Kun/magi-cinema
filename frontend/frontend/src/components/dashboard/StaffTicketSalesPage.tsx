@@ -11,7 +11,7 @@ import { showtimeSeatService } from "@/api/showtimeSeatApi";
 import { bookingApi, type BookingResponse } from "@/api/bookingApi";
 import { userService, type UserDetailResponse } from "@/api/userApi";
 import { paymentApi } from "@/api/paymentApi";
-import { promotionApi, type PromotionEvaluation } from "@/api/promotionApi";
+import { getPaymentLinks } from "@/utils/paymentLinks";
 import { isMembershipFreeTicketApplicable, membershipApi, membershipFreeTicketLabel, type Membership, type MembershipBenefit } from "@/api/membershipApi";
 import {
   comboApi,
@@ -383,7 +383,10 @@ export function StaffTicketSalesPage() {
   useEffect(() => {
     if (!qrCheckout) return;
     let stopped = false;
+    let inFlight = false;
     const checkStatus = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
       try {
         const booking = await bookingApi.getCounterBookingStatus(qrCheckout.booking.bookingId);
         if (stopped) return;
@@ -405,6 +408,8 @@ export function StaffTicketSalesPage() {
         }
       } catch {
         // A transient polling error must not interrupt the payment screen.
+      } finally {
+        inFlight = false;
       }
     };
     void checkStatus();
@@ -1010,9 +1015,8 @@ export function StaffTicketSalesPage() {
             ? await paymentApi.createMomoOrder(pendingBooking.bookingId)
             : await paymentApi.createZaloPayOrder(pendingBooking.bookingId);
             
-          const payUrl = "payUrl" in paymentResult ? paymentResult.payUrl : paymentResult.orderUrl;
-          const qrCodeSource = "qrCodeUrl" in paymentResult ? (paymentResult.qrCodeUrl || paymentResult.deeplink || paymentResult.payUrl) : paymentResult.orderUrl;
-          const qrUrl = await paymentApi.createQrCodeUrl(qrCodeSource);
+          const { payUrl, qrContent } = getPaymentLinks(paymentResult);
+          const qrUrl = await paymentApi.createQrCodeUrl(qrContent);
           
           setQrCheckout({ booking: pendingBooking, payUrl, qrUrl, method: paymentMethod });
           toast.info(`Đã tạo mã QR. Hệ thống đang chờ kết quả thanh toán từ ${paymentMethod === "MOMO" ? "MoMo" : "ZaloPay"}.`);
@@ -1150,9 +1154,8 @@ export function StaffTicketSalesPage() {
         ? await paymentApi.createMomoOrder(completedBooking.bookingId)
         : await paymentApi.createZaloPayOrder(completedBooking.bookingId);
         
-      const payUrl = "payUrl" in paymentResult ? paymentResult.payUrl : paymentResult.orderUrl;
-      const qrCodeSource = "qrCodeUrl" in paymentResult ? (paymentResult.qrCodeUrl || paymentResult.deeplink || paymentResult.payUrl) : paymentResult.orderUrl;
-      const qrUrl = await paymentApi.createQrCodeUrl(qrCodeSource);
+      const { payUrl, qrContent } = getPaymentLinks(paymentResult);
+      const qrUrl = await paymentApi.createQrCodeUrl(qrContent);
       
       setQrCheckout({ booking: completedBooking, payUrl, qrUrl, method: paymentMethod as "MOMO" | "ZALOPAY" });
       setCompletedBooking(null);

@@ -22,6 +22,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     boolean existsByUser_UserId(String userId);
     Optional<Booking> findByTicketQrToken(String ticketQrToken);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Booking> findFirstByUser_UserIdAndShowtime_ShowtimeIdAndStatusOrderByCreatedAtDesc(
             String userId,
             Long showtimeId,

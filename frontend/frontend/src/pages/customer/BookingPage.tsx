@@ -768,13 +768,7 @@ export default function BookingPage() {
   const promotionDiscount = appliedPromotion?.originalAmount === afterBenefits
     ? appliedPromotion.discountAmount
     : 0;
-  const membershipRewardDiscount = 0;
-  const availableMembershipVouchers: any[] = [];
-  const selectedMembershipRewardCode = "";
-  const setSelectedMembershipRewardCode = (code: string) => {};
-  const selectedMembershipReward: any = null;
-  const membershipRewardApplicable = false;
-  const totalAmount = Math.max(0, afterBenefits - membershipRewardDiscount);
+  const totalAmount = afterBenefits;
   const finalAmount = Math.max(0, totalAmount - (promotionDiscount || 0));
   const ticketPaid = afterBenefits > 0 ? Math.floor(finalAmount * ticketAfterBenefits / afterBenefits) : 0;
   const concessionPaid = finalAmount - ticketPaid;
@@ -1403,22 +1397,6 @@ export default function BookingPage() {
                 </div>
               )}
               {membershipTicketDiscount > 0 && <SummaryLine label="Quyền lợi vé miễn phí" value={`-${formatCurrency(membershipTicketDiscount)}`} />}
-
-              {membership && availableMembershipVouchers.length > 0 && (
-                <div className="my-3 rounded-xl border border-violet-200 bg-violet-50/70 p-3">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-black text-violet-800"><Gift size={17} /> Voucher hội viên</div>
-                  <select value={selectedMembershipRewardCode} onChange={event => setSelectedMembershipRewardCode(event.target.value)} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-violet-500">
-                    <option value="">Không sử dụng voucher hội viên</option>
-                    {availableMembershipVouchers.map(item => {
-                      const concessionVoucher = item.rewardTarget === 'CONCESSION';
-                      const applicable = concessionVoucher ? concessionAfterBenefits > 0 : ticketAfterBenefits > 0;
-                      return <option key={item.redemptionId} value={item.redemptionCode} disabled={!applicable}>{item.rewardName} · giảm {formatCurrency(item.valueAmount)}{!applicable ? concessionVoucher ? ' · cần chọn bắp nước' : ' · không có tiền vé phù hợp' : ''}</option>;
-                    })}
-                  </select>
-                  {selectedMembershipReward && <p className={`mt-2 text-xs ${membershipRewardApplicable ? 'text-violet-700' : 'font-bold text-rose-600'}`}>{membershipRewardApplicable ? `${selectedMembershipReward.rewardTarget === 'CONCESSION' ? 'Áp dụng cho bắp nước' : 'Áp dụng cho tiền vé'} · mã ${selectedMembershipReward.redemptionCode}` : 'Voucher này chưa đủ điều kiện áp dụng cho đơn hàng.'}</p>}
-                </div>
-              )}
-              {membershipRewardDiscount > 0 && <SummaryLine label="Voucher hội viên" value={`-${formatCurrency(membershipRewardDiscount)}`} />}
 
               <div className="mt-4 border-t border-slate-200 pt-4">
                 <div className="mb-2 text-sm font-bold text-slate-700">Mã khuyến mãi (Tùy chọn)</div>

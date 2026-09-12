@@ -3,16 +3,18 @@ import {
   Ban, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Edit, Loader2, Plus, RefreshCw, X, Armchair, Clock, Film, Users, AlertTriangle, Wand2, Search
 } from "lucide-react";
 import { toast } from "react-toastify";
-import { showtimeApi, type ShowtimeResponse, type ShowtimeAdminRequest, type ShowtimeStatusEnum, type AutoShowtimeResponse, type AutoShowtimeRequest, type AutoShowtimeConfig, type AutoShowtimeAgeRule, type AutoShowtimeMoviePolicy, type AutoShowtimePresentationPolicy } from "@/api/showtimeApi";
+import { showtimeApi, type ShowtimeResponse, type ShowtimeAdminRequest, type ShowtimeStatusEnum } from "@/api/showtimeApi";
 import { getApiErrorMessage } from "@/api/errors";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { showtimeSeatService } from "@/api/showtimeSeatApi";
 import { movieService, type GetMoviesParams, type MoviePresentationResponse, type MovieResponse, type MovieStatus } from "@/api/movieApi";
 import { cinemaRoomService, type GetCinemaRoomsParams } from "@/api/cinemaRoomApi";
-import type { ShowtimeSeat, ShowtimeSeatStatus, SeatType } from "@/types/seat";
+import type { ShowtimeSeat } from "@/types/seat";
 import type { CinemaRoom, RoomStatus, RoomType } from "@/types/cinemaRoom";
 import { TimeRulerPicker as TimePicker } from "@/components/ui/TimeRulerPicker";
-import { formatPresentationLabelFromFields, getSuggestedPresentationBasePrice, isProjectionAllowedForFormat } from "@/utils/presentation";
+import { formatPresentationLabelFromFields, getSuggestedPresentationBasePrice } from "@/utils/presentation";
 import { ShowtimePlannerWizard } from "@/components/dashboard/ShowtimePlannerWizard";
+import { ShowtimeSeatsLayoutModal } from "@/components/dashboard/ShowtimeSeatsLayoutModal";
 import { ticketPricingApi, type TicketPriceConfig } from "@/api/ticketPricingApi";
 
 const FONT = "'Inter', sans-serif";
@@ -54,19 +56,6 @@ const calculateAutoBasePrice = (defaultPrice: number, presentation?: MoviePresen
   const config = getActivePricingConfig();
   return getSuggestedPresentationBasePrice(config?.standard2dPrice ?? defaultPrice, presentation, config);
 };
-const SEAT_STATUS_CONFIG: Record<ShowtimeSeatStatus, { label: string; bg: string; color: string; border: string }> = {
-  AVAILABLE: { label: "Trống",    bg: "#ecfdf5", color: "#047857", border: "#10b981" },
-  HOLDING:   { label: "Đang giữ", bg: "#fffbeb", color: "#b45309", border: "#f59e0b" },
-  BOOKED:    { label: "Đã đặt",   bg: "#fef2f2", color: "#b91c1c", border: "#ef4444" },
-};
-
-const SEAT_TYPE_CONFIG: Record<SeatType, { label: string; color: string }> = {
-  NORMAL:   { label: "Thường",   color: "#2563eb" },
-  VIP:      { label: "VIP",      color: "#7c3aed" },
-  COUPLE:   { label: "Đôi",   color: "#db2777" },
-  DISABLED: { label: "Hỗ trợ", color: "#0f766e" },
-};
-
 const EMPTY_FORM: ShowtimeAdminRequest = {
   movieId: 0,
   cinemaRoomId: 0,
@@ -109,25 +98,6 @@ function formatDateShortText(value: string): string {
 
 function formatCurrency(value?: number | null): string {
   return (value ?? DEFAULT_BASE_PRICE).toLocaleString("vi-VN", { style: "currency", currency: "VND" });
-}
-
-function formatCompactNumber(value?: number | null): string {
-  return (value ?? 0).toLocaleString("vi-VN");
-}
-
-function describeSkippedReason(reason: string): string {
-  const value = reason.toLowerCase();
-  if (value.includes("định dạng")) return "Phim và loại phòng không cùng định dạng chiếu.";
-  if (value.includes("trước ngày")) return "Phim chưa tới ngày khởi chiếu chính thức.";
-  if (value.includes("sau ngày")) return "Phim đã qua ngày kết thúc chiếu.";
-  if (value.includes("giới hạn")) return "Phim đã đạt số suất tối đa trong ngày.";
-  if (value.includes("độ tuổi")) return "Khung giờ không phù hợp quy tắc độ tuổi.";
-  if (value.includes("cùng mốc giờ")) return "Phim thường sẽ tránh chiếu cùng mốc giờ ở nhiều phòng.";
-  if (value.includes("khoảng trống")) return "Không còn đủ thời lượng trống trong phòng/ngày.";
-  if (value.includes("active") || value.includes("bảo trì")) return "Không tìm thấy phòng đang hoạt động.";
-  if (value.includes("thời lượng")) return "Phim thiếu thời lượng hoặc khoảng trống không đủ dài.";
-  if (value.includes("kết thúc") || value.includes("bị ẩn")) return "Phim đã kết thúc hoặc đang bị ẩn.";
-  return "Điều kiện xếp lịch không phù hợp.";
 }
 
 function formatTime(time: string): string {
@@ -199,7 +169,7 @@ function normalizeFormat(format?: string | null): string {
   return format;
 }
 
-function getRoomSupportedFormats(type?: RoomType | null): string[] {
+function getRoomSupportedFormats(type?: RoomType | "DOLBY" | null): string[] {
   switch (type) {
     case "IMAX":
       return ["IMAX"];
@@ -351,6 +321,8 @@ async function fetchAllCinemaRooms(params: Omit<GetCinemaRoomsParams, "page" | "
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export function ShowtimeManagementPage({ canManage = true }: { canManage?: boolean }) {
+  const { startRequest, invalidateRequests } = useLatestRequest();
+  const { startRequest: startSeatCountRequest, invalidateRequests: invalidateSeatCountRequests } = useLatestRequest();
   const today = new Date();
   const todayStr = toDateStr(today);
 
@@ -423,6 +395,7 @@ export function ShowtimeManagementPage({ canManage = true }: { canManage?: boole
   };
 
   const fetchShowtimes = useCallback(async (quiet = false) => {
+    const isCurrent = startRequest();
     const filteringByMovieOrRoom = movieFilter !== "" || roomFilter !== "";
     if (!selectedDate && !filteringByMovieOrRoom) return;
     if (!quiet) setLoading(true);
@@ -433,16 +406,19 @@ export function ShowtimeManagementPage({ canManage = true }: { canManage?: boole
         cinemaRoomId: roomFilter === "" ? undefined : roomFilter,
         status: showCancelledMode ? "CANCELLED" : undefined,
       });
-      setItems(data || []);
+      if (isCurrent()) setItems(data || []);
     } catch (err) {
+      if (!isCurrent()) return;
       console.error("Failed to fetch showtimes", err);
+      if (!quiet) toast.error(getApiErrorMessage(err, "Không thể tải danh sách suất chiếu."));
     } finally {
-      if (!quiet) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [selectedDate, showCancelledMode, movieFilter, roomFilter]);
+  }, [selectedDate, showCancelledMode, movieFilter, roomFilter, startRequest]);
 
   // Fetch seat counts for all showtimes in view
   const fetchSeatCounts = useCallback(async (showtimes: ShowtimeResponse[]) => {
+    const isCurrent = startSeatCountRequest();
     const counts: Record<number, { booked: number; total: number }> = {};
     try {
       await Promise.all(
@@ -457,8 +433,8 @@ export function ShowtimeManagementPage({ canManage = true }: { canManage?: boole
         })
       );
     } catch { /* ignore */ }
-    setSeatCounts(counts);
-  }, []);
+    if (isCurrent()) setSeatCounts(counts);
+  }, [startSeatCountRequest]);
 
   useEffect(() => {
     const requestTimer = window.setTimeout(fetchDependencies, 0);
@@ -467,8 +443,11 @@ export function ShowtimeManagementPage({ canManage = true }: { canManage?: boole
 
   useEffect(() => {
     const requestTimer = window.setTimeout(() => fetchShowtimes(), 0);
-    return () => window.clearTimeout(requestTimer);
-  }, [fetchShowtimes]);
+    return () => {
+      window.clearTimeout(requestTimer);
+      invalidateRequests();
+    };
+  }, [fetchShowtimes, invalidateRequests]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -485,8 +464,11 @@ export function ShowtimeManagementPage({ canManage = true }: { canManage?: boole
         setSeatCounts({});
       }
     }, 0);
-    return () => window.clearTimeout(requestTimer);
-  }, [items, fetchSeatCounts]);
+    return () => {
+      window.clearTimeout(requestTimer);
+      invalidateSeatCountRequests();
+    };
+  }, [items, fetchSeatCounts, invalidateSeatCountRequests]);
 
   useEffect(() => {
     const visibleIds = new Set(items.map((item) => item.showtimeId));
@@ -1535,767 +1517,6 @@ function ConfirmDialog({ open, message, onConfirm, onClose }: {
 
 // ── Modals ────────────────────────────────────────────────────────────────────
 
-const createDefaultMoviePolicy = (movie: MovieResponse | undefined, maxPerMovie: number): AutoShowtimeMoviePolicy => {
-  const presentations = (movie?.presentations ?? []).filter((item) => item.active !== false && item.presentationId);
-  const share = presentations.length ? Number((100 / presentations.length).toFixed(2)) : 0;
-  return {
-    movieId: movie?.movieId ?? 0,
-    minShowtimesPerDay: 0,
-    targetShowtimesPerDay: Math.min(2, maxPerMovie),
-    maxShowtimesPerDay: maxPerMovie,
-    priorityWeight: 0,
-    presentationPolicies: presentations.map((item) => ({
-      presentationId: item.presentationId,
-      minShowtimesPerDay: 0,
-      targetShowtimesPerDay: 0,
-      maxShowtimesPerDay: maxPerMovie,
-      targetSharePercent: share,
-      priorityWeight: 0,
-    })),
-  };
-};
-
-const normalizeMoviePolicyShares = (policies: AutoShowtimeMoviePolicy[]) => {
-  if (!policies.length) return policies;
-  const configuredTotal = policies.reduce((sum, policy) => sum + (policy.targetSharePercent ?? 0), 0);
-  if (configuredTotal > 0) return policies;
-  const equalShare = Number((100 / policies.length).toFixed(2));
-  return policies.map((policy) => ({ ...policy, targetSharePercent: equalShare }));
-};
-
-export function LegacyAutoShowtimeModal({ movies, rooms, defaultDate, onClose, onSuccess }: {
-  movies: MovieResponse[];
-  rooms: CinemaRoom[];
-  defaultDate: string;
-  onClose: () => void;
-  onSuccess: (response: AutoShowtimeResponse) => void;
-}) {
-  const todayStr = toDateStr(new Date());
-  const startDate = defaultDate && defaultDate >= todayStr ? defaultDate : todayStr;
-  const [fromDate, setFromDate] = useState(startDate);
-  const [toDate, setToDate] = useState(startDate);
-  const [openingTime, setOpeningTime] = useState("08:00");
-  const [latestFinishTime, setLatestFinishTime] = useState("02:00");
-  const [turnaroundMinutes, setTurnaroundMinutes] = useState(20);
-  const [basePrice, setBasePrice] = useState(DEFAULT_BASE_PRICE);
-  const [maxPerMovie, setMaxPerMovie] = useState(3);
-  const [maxHotPerMovie, setMaxHotPerMovie] = useState(24);
-  const [primeStartTime, setPrimeStartTime] = useState("18:00");
-  const [primeEndTime, setPrimeEndTime] = useState("22:30");
-  const [draftExpireMinutes, setDraftExpireMinutes] = useState(30);
-  const [enableAgeRules, setEnableAgeRules] = useState(true);
-  const [allowSameMovieSameStartTime, setAllowSameMovieSameStartTime] = useState(false);
-  const [ageRules, setAgeRules] = useState<AutoShowtimeAgeRule[]>([]);
-  const [configLoading, setConfigLoading] = useState(false);
-  const [configSaving, setConfigSaving] = useState(false);
-  const [movieIds, setMovieIds] = useState<number[]>([]);
-  const [roomIds, setRoomIds] = useState<number[]>([]);
-  const [moviePolicies, setMoviePolicies] = useState<Record<number, AutoShowtimeMoviePolicy>>({});
-  const [formError, setFormError] = useState("");
-  const [preview, setPreview] = useState<AutoShowtimeResponse | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const eligibleMovies = useMemo(
-    () => movies.filter((movie) => {
-      const isBasicEligible = movie.status !== "INACTIVE"
-        && movie.status !== "ENDED"
-        && (movie.duration ?? 0) > 0
-        && getMovieFormats(movie).length > 0;
-      
-      if (!isBasicEligible) return false;
-
-      const effectiveFromDate = movie.fromDate || "";
-
-      const isWithinDateRange = (!effectiveFromDate || effectiveFromDate <= toDate)
-        && (!movie.toDate || movie.toDate >= fromDate);
-        
-      return isWithinDateRange;
-    }),
-    [movies, fromDate, toDate]
-  );
-
-  const selectedMovies = useMemo(
-    () => eligibleMovies.filter((m) => movieIds.includes(m.movieId)),
-    [movieIds, eligibleMovies]
-  );
-
-  const activeRooms = useMemo(
-    () => rooms.filter((room) => {
-      if (room.status !== "ACTIVE") return false;
-      if (movieIds.length === 0) return true;
-      return selectedMovies.some(movie => isRoomCompatibleWithMovie(room, movie));
-    }),
-    [rooms, movieIds, selectedMovies]
-  );
-
-  const toggleMovie = (movieId: number) => {
-    setMovieIds((prev) => {
-      if (prev.includes(movieId)) return prev.filter((id) => id !== movieId);
-      const movie = eligibleMovies.find((item) => item.movieId === movieId);
-      setMoviePolicies((current) => current[movieId] ? current : {
-        ...current,
-        [movieId]: createDefaultMoviePolicy(movie, maxPerMovie),
-      });
-      return [...prev, movieId];
-    });
-  };
-
-  const updateMoviePolicy = (movieId: number, patch: Partial<AutoShowtimeMoviePolicy>) => {
-    setMoviePolicies((current) => ({
-      ...current,
-      [movieId]: { ...(current[movieId] ?? { movieId }), ...patch, movieId },
-    }));
-  };
-
-  const updatePresentationPolicy = (movieId: number, presentationId: number, patch: Partial<AutoShowtimePresentationPolicy>) => {
-    const movie = eligibleMovies.find((item) => item.movieId === movieId);
-    const base = moviePolicies[movieId] ?? createDefaultMoviePolicy(movie, maxPerMovie);
-    const policies = [...(base.presentationPolicies ?? [])];
-    const index = policies.findIndex((item) => item.presentationId === presentationId);
-    if (index >= 0) policies[index] = { ...policies[index], ...patch, presentationId };
-    else policies.push({ presentationId, ...patch });
-    updateMoviePolicy(movieId, { presentationPolicies: policies });
-  };
-
-  const toggleRoom = (roomId: number) => {
-    setRoomIds((prev) => prev.includes(roomId) ? prev.filter((id) => id !== roomId) : [...prev, roomId]);
-  };
-
-  useEffect(() => {
-    const resetTimer = window.setTimeout(() => setPreview(null), 0);
-    return () => window.clearTimeout(resetTimer);
-  }, [fromDate, toDate, openingTime, latestFinishTime, turnaroundMinutes, basePrice, maxPerMovie, maxHotPerMovie, primeStartTime, primeEndTime, enableAgeRules, allowSameMovieSameStartTime, ageRules, movieIds, roomIds, moviePolicies]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadConfig = async () => {
-      setConfigLoading(true);
-      try {
-        const config = await showtimeApi.getAutoShowtimeConfig();
-        if (!mounted) return;
-        setOpeningTime(formatTime(config.openingTime));
-        setLatestFinishTime(formatTime(config.latestFinishTime));
-        setTurnaroundMinutes(config.turnaroundMinutes ?? 20);
-        setBasePrice(config.basePrice ?? DEFAULT_BASE_PRICE);
-        setMaxPerMovie(config.maxShowtimesPerMoviePerDay ?? 3);
-        setMaxHotPerMovie(config.maxHotShowtimesPerMoviePerDay ?? 24);
-        setPrimeStartTime(formatTime(config.primeStartTime ?? "18:00"));
-        setPrimeEndTime(formatTime(config.primeEndTime ?? "22:30"));
-        setDraftExpireMinutes(config.draftExpireMinutes ?? 30);
-        setEnableAgeRules(config.enableAgeRules !== false);
-        setAllowSameMovieSameStartTime(config.allowSameMovieSameStartTime === true);
-        setAgeRules(config.ageRules ?? []);
-      } catch (err) {
-        console.error("Failed to load auto showtime config", err);
-        toast.error("Không thể tải cấu hình tạo lịch tự động.");
-      } finally {
-        if (mounted) setConfigLoading(false);
-      }
-    };
-    loadConfig();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const buildAutoRequest = (): AutoShowtimeRequest => ({
-    fromDate,
-    toDate,
-    openingTime,
-    latestFinishTime,
-    turnaroundMinutes,
-    basePrice,
-    maxShowtimesPerMoviePerDay: maxPerMovie,
-    maxHotShowtimesPerMoviePerDay: maxHotPerMovie,
-    primeStartTime,
-    primeEndTime,
-    allowSameMovieSameStartTime,
-    enableAgeRules,
-    movieIds: movieIds.length ? movieIds : undefined,
-    cinemaRoomIds: roomIds.length ? roomIds : undefined,
-    moviePolicies: normalizeMoviePolicyShares(movieIds.map((id) => moviePolicies[id]).filter((policy): policy is AutoShowtimeMoviePolicy => !!policy)),
-  });
-
-  const buildConfigPayload = (): AutoShowtimeConfig => ({
-    openingTime,
-    latestFinishTime,
-    turnaroundMinutes,
-    basePrice,
-    maxShowtimesPerMoviePerDay: maxPerMovie,
-    maxHotShowtimesPerMoviePerDay: maxHotPerMovie,
-    primeStartTime,
-    primeEndTime,
-    draftExpireMinutes,
-    allowSameMovieSameStartTime,
-    enableAgeRules,
-    ageRules,
-  });
-
-  const validateAutoForm = (): string | null => {
-    if (!fromDate || !toDate) {
-      return "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.";
-    }
-    if (fromDate < todayStr) {
-      return "Không thể tạo suất chiếu tự động cho ngày trong quá khứ.";
-    }
-    if (toDate < fromDate) {
-      return "Ngày kết thúc không được trước ngày bắt đầu.";
-    }
-    if (!basePrice || basePrice < 1000) {
-      return "Giá vé gốc phải lớn hơn hoặc bằng 1.000đ.";
-    }
-    if (turnaroundMinutes < 0 || turnaroundMinutes > 120) {
-      return "Thời gian nghỉ giữa suất phải từ 0 đến 120 phút.";
-    }
-    if (maxPerMovie < 1 || maxPerMovie > 200) {
-      return "Giới hạn an toàn phim thường mỗi ngày phải từ 1 đến 200.";
-    }
-    if (maxHotPerMovie < 1 || maxHotPerMovie > 200) {
-      return "Giới hạn an toàn phim hot mỗi ngày phải từ 1 đến 200.";
-    }
-    if (maxHotPerMovie < maxPerMovie) {
-      return "Tối đa suất phim hot phải lớn hơn hoặc bằng phim thường.";
-    }
-    if (draftExpireMinutes < 5 || draftExpireMinutes > 240) {
-      return "Thời gian hết hạn bản nháp phải từ 5 đến 240 phút.";
-    }
-    if (openingTime === latestFinishTime) {
-      return "Giờ mở cửa và giờ kết thúc lịch không được trùng nhau.";
-    }
-    const policies = movieIds.map((id) => moviePolicies[id]).filter(Boolean);
-    const totalMovieShare = policies.reduce((sum, policy) => sum + (policy.targetSharePercent ?? 0), 0);
-    if (totalMovieShare > 100.001) return "Tổng tỷ lệ mục tiêu của các phim không được vượt quá 100%.";
-    for (const policy of policies) {
-      const min = policy.minShowtimesPerDay ?? 0;
-      const target = policy.targetShowtimesPerDay ?? min;
-      const max = policy.maxShowtimesPerDay ?? maxPerMovie;
-      if (min > target || target > max) return "Quota phim phải thỏa min ≤ target ≤ max.";
-      const presentationShare = (policy.presentationPolicies ?? []).reduce((sum, item) => sum + (item.targetSharePercent ?? 0), 0);
-      if (presentationShare > 100.001) return "Tổng tỷ lệ phiên bản của mỗi phim không được vượt quá 100%.";
-    }
-    return null;
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    const error = validateAutoForm();
-    if (error) {
-      setFormError(error);
-      return;
-    }
-
-    setPreviewLoading(true);
-    setFormError("");
-    try {
-      const response = await showtimeApi.previewAutoGenerateShowtimes(buildAutoRequest());
-      setPreview(response);
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err, "Xem trước suất chiếu tự động thất bại."));
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const handleSaveConfig = async () => {
-    const error = validateAutoForm();
-    if (error) {
-      setFormError(error);
-      return;
-    }
-    setConfigSaving(true);
-    setFormError("");
-    try {
-      const saved = await showtimeApi.updateAutoShowtimeConfig(buildConfigPayload());
-      setAgeRules(saved.ageRules ?? []);
-      toast.success("Đã lưu cấu hình tạo lịch tự động.");
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err, "Lưu cấu hình tạo lịch tự động thất bại."));
-    } finally {
-      setConfigSaving(false);
-    }
-  };
-
-  const handleCreateFromPreview = async () => {
-    const error = validateAutoForm();
-    if (error) {
-      setFormError(error);
-      return;
-    }
-    if (!preview || (preview.plannedCount ?? 0) === 0) {
-      setFormError("Chưa có suất chiếu nào trong bản xem trước để tạo.");
-      return;
-    }
-    if (!preview.draftId) {
-      setFormError("Bản xem trước chưa có mã draft, vui lòng xem trước lại.");
-      return;
-    }
-
-    setSaving(true);
-    setFormError("");
-    try {
-      const response = await showtimeApi.confirmAutoShowtimeDraft(preview.draftId);
-      onSuccess(response);
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err, "Tạo suất chiếu tự động thất bại."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const previewItems = preview?.plannedShowtimes ?? [];
-  const visiblePreviewItems = previewItems.slice(0, 80);
-  const previewStats = preview?.statistics ?? null;
-  const skippedReasonEntries = Object.entries(previewStats?.skippedReasons ?? {}).sort((a, b) => b[1] - a[1]);
-  const skippedImpactTotal = skippedReasonEntries.reduce((total, [, count]) => total + count, 0);
-  const enabledAgeRuleCount = ageRules.filter((rule) => rule.enabled !== false).length;
-  const ageRuleSummary = ageRules.length
-    ? `${enabledAgeRuleCount}/${ageRules.length} quy tắc đang bật`
-    : "Hệ thống sẽ tự tạo quy tắc mặc định";
-
-  return (
-    <div 
-      style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onClick={onClose}
-    >
-      <div 
-        style={{ position: "relative", background: "#fff", borderRadius: 16, width: "100%", maxWidth: 860, maxHeight: "92vh", overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", fontFamily: FONT, display: "flex", flexDirection: "column" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-              <Wand2 size={16} color="#E63946" />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.12em" }}>Lập lịch tự động</span>
-            </div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Tạo suất chiếu tự động</h3>
-          </div>
-          <button 
-            type="button" 
-            onClick={onClose} 
-            style={{ 
-              width: 30, height: 30, borderRadius: "50%", 
-              background: "rgba(0,0,0,0.05)", border: "none", cursor: "pointer", 
-              color: "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.2s"
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "#E63946";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "rgba(0,0,0,0.05)";
-              e.currentTarget.style.color = "#94a3b8";
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ padding: 24, overflow: "auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16 }}>
-            <div>
-              <label className={LABEL_CLS}>Từ ngày *</label>
-              <input type="date" className={INPUT_CLS} min={todayStr} value={fromDate} onChange={(e) => { setFromDate(e.target.value); if (toDate < e.target.value) setToDate(e.target.value); }} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Đến ngày *</label>
-              <input type="date" className={INPUT_CLS} min={fromDate || todayStr} value={toDate} onChange={(e) => setToDate(e.target.value)} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Giờ mở cửa</label>
-              <TimePicker value={formatTime(openingTime)} onChange={setOpeningTime} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Kết thúc trước</label>
-              <TimePicker value={formatTime(latestFinishTime)} onChange={setLatestFinishTime} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Nghỉ giữa suất</label>
-              <input type="number" min={0} max={120} className={INPUT_CLS} value={turnaroundMinutes} onChange={(e) => setTurnaroundMinutes(Number(e.target.value) || 0)} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Giá vé gốc</label>
-              <input type="number" min={1000} step={1000} className={INPUT_CLS} value={basePrice} onChange={(e) => setBasePrice(Number(e.target.value) || 0)} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Giới hạn an toàn phim thường/ngày</label>
-              <input type="number" min={1} max={200} className={INPUT_CLS} value={maxPerMovie} onChange={(e) => setMaxPerMovie(Number(e.target.value) || 1)} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Giới hạn an toàn phim hot/ngày</label>
-              <input type="number" min={1} max={200} className={INPUT_CLS} value={maxHotPerMovie} onChange={(e) => setMaxHotPerMovie(Number(e.target.value) || 1)} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Bắt đầu giờ vàng</label>
-              <TimePicker value={formatTime(primeStartTime)} onChange={setPrimeStartTime} />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Kết thúc giờ vàng</label>
-              <TimePicker value={formatTime(primeEndTime)} onChange={setPrimeEndTime} />
-            </div>
-            <div style={{ gridColumn: "span 2", display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
-              <Badge bg="#eff6ff" color="#2563eb">{activeRooms.length} phòng hoạt động</Badge>
-              <Badge bg="#ecfdf5" color="#059669">{eligibleMovies.length} phim hợp lệ</Badge>
-              {configLoading && <Badge bg="#f8fafc" color="#64748b">Đang tải config</Badge>}
-            </div>
-          </div>
-
-          <div style={{ marginTop: 18, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "visible", background: "#fff" }}>
-            <div style={{ padding: "12px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>Quy tắc tự động đang áp dụng</div>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Hệ thống tự áp dụng độ tuổi, phim hot, giờ vàng và tránh trùng mốc giờ cho phim thường.</div>
-              </div>
-              <button type="button" onClick={handleSaveConfig} disabled={configSaving || previewLoading || saving} style={{ border: "1px solid #fecaca", background: "#fff5f5", color: "#E63946", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 800, cursor: configSaving ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: 7 }}>
-                {configSaving && <Loader2 size={14} className="animate-spin" />}
-                Lưu cấu hình
-              </button>
-            </div>
-            <div style={{ padding: 14, display: "grid", gap: 12 }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <Badge bg="#fef2f2" color="#dc2626">Phim hot ưu tiên giờ vàng</Badge>
-                <Badge bg="#fff7ed" color="#c2410c">Phim hot được trùng mốc giờ</Badge>
-                <Badge bg="#eff6ff" color="#2563eb">Phim thường tránh trùng giờ</Badge>
-                <Badge bg="#f8fafc" color="#475569">{ageRuleSummary}</Badge>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                  <input type="checkbox" checked={allowSameMovieSameStartTime} onChange={(event) => setAllowSameMovieSameStartTime(event.target.checked)} />
-                  Cho cùng phim bắt đầu đồng thời ở nhiều phòng
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 18, marginTop: 22 }}>
-            <SelectionPanel
-              title="Phòng chiếu"
-              subtitle={roomIds.length ? `Đã chọn ${roomIds.length} phòng` : "Không chọn = tất cả phòng ACTIVE"}
-              onClear={() => setRoomIds([])}
-            >
-              {activeRooms.length === 0 ? (
-                <div style={{ padding: 16, color: "#94a3b8", fontSize: 13 }}>Không có phòng ACTIVE.</div>
-              ) : activeRooms.map((room) => (
-                <label key={room.cinemaRoomId} style={selectionRowStyle}>
-                  <input type="checkbox" checked={roomIds.includes(room.cinemaRoomId)} onChange={() => toggleRoom(room.cinemaRoomId)} />
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{room.cinemaRoomName}</span>
-                    <span style={{ display: "block", fontSize: 12, color: "#64748b" }}>{getRoomSupportedFormats(room.type).join(", ")}</span>
-                  </span>
-                </label>
-              ))}
-            </SelectionPanel>
-
-            <SelectionPanel
-              title="Phim"
-              subtitle={movieIds.length ? `Đã chọn ${movieIds.length} phim` : "Không chọn = tất cả phim hợp lệ"}
-              onClear={() => setMovieIds([])}
-            >
-              {eligibleMovies.length === 0 ? (
-                <div style={{ padding: 16, color: "#94a3b8", fontSize: 13 }}>Không có phim hợp lệ.</div>
-              ) : eligibleMovies.map((movie) => (
-                <label key={movie.movieId} style={selectionRowStyle}>
-                  <input type="checkbox" checked={movieIds.includes(movie.movieId)} onChange={() => toggleMovie(movie.movieId)} />
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{movie.movieNameVn}</span>
-                      {movie.isHot && <Badge bg="#fff7ed" color="#c2410c">Hot</Badge>}
-                    </span>
-                    <span style={{ display: "block", fontSize: 12, color: "#64748b" }}>{movie.duration ?? 0} phút · {getMovieFormats(movie).join(", ")}</span>
-                  </span>
-                </label>
-              ))}
-            </SelectionPanel>
-          </div>
-
-          {selectedMovies.length > 0 && (
-            <div style={{ marginTop: 18, border: "1px solid #dbeafe", borderRadius: 12, background: "#f8fbff", padding: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>Phân bổ phim và phiên bản chiếu</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 3, marginBottom: 12 }}>
-                Tỷ lệ là mục tiêu mềm; mức tối thiểu, mục tiêu, tối đa và độ ưu tiên giúp hệ thống cân bằng nhu cầu thực tế.
-              </div>
-              <div style={{ display: "grid", gap: 12 }}>
-                {selectedMovies.map((movie) => {
-                  const policy = moviePolicies[movie.movieId] ?? createDefaultMoviePolicy(movie, maxPerMovie);
-                  const presentations = (movie.presentations ?? []).filter((item) => item.active !== false);
-                  return (
-                    <div key={movie.movieId} style={{ border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff", padding: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
-                        <strong style={{ color: "#0f172a", fontSize: 13 }}>{movie.movieNameVn}</strong>
-                        <span style={{ color: "#64748b", fontSize: 11 }}>{movie.isHot ? "Hot thủ công" : "Demand tự động"}</span>
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 8 }}>
-                        <PolicyNumber label="Min" value={policy.minShowtimesPerDay ?? 0} min={0} max={40} onChange={(value) => updateMoviePolicy(movie.movieId, { minShowtimesPerDay: value })} />
-                        <PolicyNumber label="Target" value={policy.targetShowtimesPerDay ?? 0} min={0} max={40} onChange={(value) => updateMoviePolicy(movie.movieId, { targetShowtimesPerDay: value })} />
-                        <PolicyNumber label="Max" value={policy.maxShowtimesPerDay ?? maxPerMovie} min={1} max={200} onChange={(value) => updateMoviePolicy(movie.movieId, { maxShowtimesPerDay: value })} />
-                        <PolicyNumber label="Tỷ lệ %" value={policy.targetSharePercent ?? 0} min={0} max={100} onChange={(value) => updateMoviePolicy(movie.movieId, { targetSharePercent: value })} />
-                        <PolicyNumber label="Ưu tiên" value={policy.priorityWeight ?? 0} min={-100} max={100} onChange={(value) => updateMoviePolicy(movie.movieId, { priorityWeight: value })} />
-                      </div>
-                      {presentations.length > 0 && (
-                        <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
-                          {presentations.map((presentation) => {
-                            const presentationPolicy = policy.presentationPolicies?.find((item) => item.presentationId === presentation.presentationId)
-                              ?? { presentationId: presentation.presentationId, targetSharePercent: 0, priorityWeight: 0, maxShowtimesPerDay: policy.maxShowtimesPerDay };
-                            return (
-                              <div key={presentation.presentationId} style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1fr) repeat(3, 90px)", gap: 8, alignItems: "end", background: "#f8fafc", borderRadius: 8, padding: 8 }}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", alignSelf: "center" }}>{presentation.displayName || presentation.label || `Phiên bản #${presentation.presentationId}`}</div>
-                                <PolicyNumber label="Tỷ lệ %" value={presentationPolicy.targetSharePercent ?? 0} min={0} max={100} onChange={(value) => updatePresentationPolicy(movie.movieId, presentation.presentationId, { targetSharePercent: value })} />
-                                <PolicyNumber label="Ưu tiên" value={presentationPolicy.priorityWeight ?? 0} min={-100} max={100} onChange={(value) => updatePresentationPolicy(movie.movieId, presentation.presentationId, { priorityWeight: value })} />
-                                <PolicyNumber label="Max/ngày" value={presentationPolicy.maxShowtimesPerDay ?? (policy.maxShowtimesPerDay || maxPerMovie)} min={1} max={200} onChange={(value) => updatePresentationPolicy(movie.movieId, presentation.presentationId, { maxShowtimesPerDay: value })} />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {formError && (
-            <div style={{ marginTop: 16, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 14px", color: "#dc2626", fontSize: 13 }}>
-              {formError}
-            </div>
-          )}
-
-          {preview && (
-            <div style={{ marginTop: 18, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
-              <div style={{ padding: "12px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>Bản xem trước</div>
-                  <div style={{ marginTop: 2, fontSize: 12, color: "#64748b" }}>
-                    Dự kiến tạo {preview.plannedCount ?? previewItems.length} suất · Bỏ qua {preview.skippedRoomDays ?? 0} lượt phòng/ngày không có lịch phù hợp
-                    {preview.draftId ? ` · Draft #${preview.draftId}` : ""}
-                  </div>
-                </div>
-                <Badge bg={previewItems.length ? "#ecfdf5" : "#fef2f2"} color={previewItems.length ? "#059669" : "#dc2626"}>
-                  {previewItems.length ? "Có thể tạo" : "Không có lịch"}
-                </Badge>
-              </div>
-
-              {previewStats && (
-                <div style={{ padding: 14, borderBottom: "1px solid #f1f5f9", display: "grid", gap: 12 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 10 }}>
-                    <PreviewMetric label="Phim hợp lệ" value={`${previewStats.eligibleMovieCount}/${previewStats.selectedMovieCount}`} />
-                    <PreviewMetric label="Phòng hoạt động" value={`${previewStats.activeRoomCount}/${previewStats.selectedRoomCount}`} />
-                    <PreviewMetric label="Suất đã có" value={previewStats.existingShowtimeCount} />
-                    <PreviewMetric label="Dự kiến" value={previewStats.plannedCount} tone="#059669" />
-                    <PreviewMetric label="Bỏ qua" value={previewStats.skippedRoomDays} tone="#d97706" />
-                    <PreviewMetric label="Điểm lịch" value={Math.round(previewStats.scheduleScore ?? 0)} tone="#7c3aed" />
-                  </div>
-
-                  {(previewStats.movieAllocations?.length ?? 0) > 0 && (
-                    <div style={{ border: "1px solid #dbeafe", borderRadius: 10, overflow: "hidden" }}>
-                      <div style={{ padding: "8px 10px", background: "#eff6ff", fontSize: 12, fontWeight: 900, color: "#1e40af" }}>Mục tiêu và phân bổ thực tế</div>
-                      {(previewStats.movieAllocations ?? []).map((allocation) => (
-                        <div key={allocation.key} style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1fr) 80px 90px 90px 90px", gap: 8, padding: "8px 10px", borderTop: "1px solid #e2e8f0", fontSize: 12, alignItems: "center" }}>
-                          <strong style={{ color: "#334155" }}>{allocation.label}</strong>
-                          <span>{allocation.actualCount} suất</span>
-                          <span>MT {allocation.targetSharePercent}%</span>
-                          <span>TT {allocation.actualSharePercent}%</span>
-                          <span style={{ color: Math.abs(allocation.deviationPercent) <= 5 ? "#059669" : "#d97706", fontWeight: 800 }}>{allocation.deviationPercent > 0 ? "+" : ""}{allocation.deviationPercent}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-                    <PreviewStatList title="Theo phim" items={previewStats.byMovie} />
-                    <PreviewStatList title="Theo phòng" items={previewStats.byRoom} />
-                    <PreviewStatList title="Theo ngày" items={previewStats.byDate} />
-                  </div>
-
-                  {(skippedReasonEntries.length > 0 || previewStats.appliedRules?.length > 0) && (
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
-                      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: 10 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "#92400e" }}>Mục không xếp được</div>
-                            <div style={{ marginTop: 2, fontSize: 11, color: "#b45309", lineHeight: 1.45 }}>
-                              Các số này là số phim/ngày, phim/phòng/ngày hoặc phòng/ngày bị ảnh hưởng, không phải số lần thử kỹ thuật.
-                            </div>
-                          </div>
-                          {skippedImpactTotal > 0 && (
-                            <strong style={{ flexShrink: 0, fontSize: 12, color: "#92400e" }}>{formatCompactNumber(skippedImpactTotal)}</strong>
-                          )}
-                        </div>
-                        {skippedReasonEntries.slice(0, 6).map(([label, count]) => {
-                          const percent = skippedImpactTotal > 0 ? Math.round((count / skippedImpactTotal) * 100) : 0;
-                          return (
-                          <div key={label} style={{ padding: "7px 0", borderTop: "1px solid rgba(217,119,6,0.16)" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, color: "#92400e" }}>
-                              <span style={{ fontWeight: 700 }}>{label}</span>
-                              <strong>{formatCompactNumber(count)} mục</strong>
-                            </div>
-                            <div style={{ marginTop: 3, display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, color: "#b45309", lineHeight: 1.45 }}>
-                              <span>{describeSkippedReason(label)}</span>
-                              <span style={{ flexShrink: 0 }}>{percent}%</span>
-                            </div>
-                          </div>
-                          );
-                        })}
-                        {skippedReasonEntries.length === 0 && <div style={{ fontSize: 12, color: "#b45309" }}>Không có lý do bỏ qua đáng kể.</div>}
-                      </div>
-                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", marginBottom: 7 }}>Quy tắc đang áp dụng</div>
-                        {(previewStats.appliedRules ?? []).slice(0, 8).map((rule) => (
-                          <div key={rule} style={{ fontSize: 12, color: "#64748b", padding: "3px 0" }}>{rule}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {preview.warnings?.length > 0 && (
-                <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", display: "grid", gap: 6 }}>
-                  {preview.warnings.map((warning, index) => (
-                    <div key={`${warning}-${index}`} style={{ fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "7px 9px" }}>
-                      {warning}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {previewItems.length > 0 && (
-                <div style={{ maxHeight: 300, overflow: "auto" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "92px 92px minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(120px, 0.9fr) 110px", gap: 10, padding: "9px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", fontSize: 11, fontWeight: 800, color: "#64748b", letterSpacing: "0.04em" }}>
-                    <span>Ngày</span>
-                    <span>Giờ</span>
-                    <span>Phim</span>
-                    <span>Phòng</span>
-                    <span>Phiên bản</span>
-                    <span>Giá vé</span>
-                  </div>
-                  {visiblePreviewItems.map((item, index) => (
-                    <div key={`${item.showDate}-${item.startTime}-${item.cinemaRoomId}-${item.movieId}-${index}`} style={{ display: "grid", gridTemplateColumns: "92px 92px minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(120px, 0.9fr) 110px", gap: 10, padding: "10px 14px", borderBottom: "1px solid #f1f5f9", alignItems: "center", fontSize: 13, color: "#334155" }}>
-                      <span style={{ fontWeight: 700, color: "#0f172a" }}>{formatDateShortText(item.showDate)}</span>
-                      <span style={{ fontWeight: 800, color: "#E63946" }}>{formatTime(item.startTime)} ~ {formatTime(item.endTime)}</span>
-                      <span style={{ minWidth: 0, overflow: "hidden" }}>
-                        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.movieName || `#${item.movieId}`}</span>
-                        <span style={{ display: "block", marginTop: 2, fontSize: 11, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {item.ageRating || "Chưa phân loại"}{item.ruleNote ? ` · ${item.ruleNote}` : ""}
-                        </span>
-                      </span>
-                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.cinemaRoomName || `#${item.cinemaRoomId}`}</span>
-                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700, color: "#475569" }}>
-                        {formatPresentationSummary(item.presentationName, item.presentationFormat, item.projectionType, item.languageType) || "-"}
-                      </span>
-                      <span>{formatCurrency(item.basePrice)}</span>
-                    </div>
-                  ))}
-                  {previewItems.length > visiblePreviewItems.length && (
-                    <div style={{ padding: "10px 14px", fontSize: 12, color: "#64748b", textAlign: "center", background: "#f8fafc" }}>
-                      Còn {previewItems.length - visiblePreviewItems.length} suất khác, hệ thống chỉ hiển thị 80 suất đầu để dễ xem.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
-            <ModalBtn variant="cancel" type="button" onClick={onClose}>Hủy</ModalBtn>
-            <ModalBtn variant="cancel" type="submit" disabled={previewLoading || saving}>
-              {previewLoading && <Loader2 size={16} className="animate-spin" />}
-              {previewLoading ? "Đang xem..." : preview ? "Xem lại" : "Xem trước"}
-            </ModalBtn>
-            {preview && (
-              <ModalBtn variant="primary" type="button" onClick={handleCreateFromPreview} disabled={saving || previewLoading || previewItems.length === 0}>
-                {saving && <Loader2 size={16} className="animate-spin" />}
-                {saving ? "Đang tạo..." : `Xác nhận tạo ${preview.plannedCount ?? previewItems.length} suất`}
-              </ModalBtn>
-            )}
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function PolicyNumber({ label, value, min, max, onChange }: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label style={{ display: "grid", gap: 4, fontSize: 10, fontWeight: 800, color: "#64748b" }}>
-      {label}
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Math.max(min, Math.min(max, Number(event.target.value) || 0)))}
-        style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 7, padding: "6px 7px", fontSize: 12, color: "#0f172a", background: "#fff" }}
-      />
-    </label>
-  );
-}
-
-function SelectionPanel({ title, subtitle, onClear, children }: {
-  title: string;
-  subtitle: string;
-  onClear: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
-      <div style={{ padding: "12px 14px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>{title}</div>
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{subtitle}</div>
-        </div>
-        <button type="button" onClick={onClear} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#475569", cursor: "pointer", whiteSpace: "nowrap" }}>
-          Bỏ chọn
-        </button>
-      </div>
-      <div style={{ maxHeight: 260, overflow: "auto", display: "flex", flexDirection: "column" }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function PreviewMetric({ label, value, tone = "#0f172a" }: { label: string; value: ReactNode; tone?: string }) {
-  return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", background: "#fff" }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: "0.05em" }}>{label}</div>
-      <div style={{ marginTop: 4, fontSize: 18, fontWeight: 900, color: tone }}>{value}</div>
-    </div>
-  );
-}
-
-function PreviewStatList({ title, items }: { title: string; items?: { key: string; label: string; count: number }[] }) {
-  const visibleItems = (items ?? []).slice(0, 5);
-  return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 10, background: "#fff" }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", marginBottom: 7 }}>{title}</div>
-      {visibleItems.length === 0 ? (
-        <div style={{ fontSize: 12, color: "#94a3b8" }}>Chưa có dữ liệu.</div>
-      ) : visibleItems.map((item) => (
-        <div key={item.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, color: "#475569", padding: "3px 0" }}>
-          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
-          <strong style={{ color: "#0f172a" }}>{item.count}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const selectionRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "18px minmax(0, 1fr)",
-  gap: 10,
-  alignItems: "center",
-  padding: "10px 14px",
-  borderBottom: "1px solid #f1f5f9",
-  cursor: "pointer",
-};
-
 function ShowtimeEditModal({ title, form, setForm, movies, rooms, formError, formLoading, onClose, onSubmit }: {
   title: string;
   form: ShowtimeAdminRequest;
@@ -3053,210 +2274,6 @@ function ShowtimeBatchFormModal({ movies, rooms, defaultDate, onClose, onSuccess
             </div>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Showtime Seats Layout Modal ───────────────────────────────────────────────
-
-function compareSeats(a: ShowtimeSeat, b: ShowtimeSeat) {
-  const rowA = a.seatRow ?? "";
-  const rowB = b.seatRow ?? "";
-  const r = rowA.localeCompare(rowB, undefined, { numeric: true });
-  if (r !== 0) return r;
-  return (a.seatNumber ?? 0) - (b.seatNumber ?? 0);
-}
-
-function ShowtimeSeatsLayoutModal({ showtime, movies, rooms, onClose }: {
-  showtime: ShowtimeResponse;
-  movies: MovieResponse[];
-  rooms: CinemaRoom[];
-  onClose: () => void;
-}) {
-  const [seats, setSeats] = useState<ShowtimeSeat[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const mName = movies.find(m => m.movieId === showtime.movieId)?.movieNameVn || `#${showtime.movieId}`;
-  const room = rooms.find(r => r.cinemaRoomId === showtime.cinemaRoomId);
-  const rName = room?.cinemaRoomName || `#${showtime.cinemaRoomId}`;
-  const presentationName = formatPresentationSummary(showtime.presentationName, showtime.presentationFormat, showtime.projectionType, showtime.languageType);
-
-  const fetchSeats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const stData = await showtimeSeatService.getShowtimeSeats({
-        showtimeId: showtime.showtimeId,
-        page: 0,
-        size: 1000,
-      });
-      const sorted = (stData.content || []).sort(compareSeats);
-      setSeats(sorted);
-    } catch (err) {
-      console.error("Failed to fetch showtime seats", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [showtime.showtimeId]);
-
-  useEffect(() => {
-    const requestTimer = window.setTimeout(fetchSeats, 0);
-    return () => window.clearTimeout(requestTimer);
-  }, [fetchSeats]);
-
-  const rows = useMemo(() => {
-    const grouped = new Map<string, ShowtimeSeat[]>();
-    seats.forEach(s => {
-      const row = s.seatRow || "A";
-      if (!grouped.has(row)) grouped.set(row, []);
-      grouped.get(row)!.push(s);
-    });
-    return Array.from(grouped.entries()).sort((a,b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
-  }, [seats]);
-
-  // Seat stats
-  const bookedSeats = seats.filter(s => s.status === "BOOKED").length;
-  const holdingSeats = seats.filter(s => s.status === "HOLDING").length;
-  const availableSeats = seats.filter(s => s.status === "AVAILABLE").length;
-
-  const getSeatStyle = (seat: ShowtimeSeat, isSelected: boolean) => {
-    if (isSelected) return { bg: "rgba(244,63,94,0.15)", border: "#f43f5e", color: "#f43f5e", shadow: "0 0 15px rgba(244,63,94,0.4)" };
-    if (seat.status === "BOOKED") return { bg: "rgba(239,68,68,0.12)", border: "#ef4444", color: "#dc2626", shadow: "0 0 10px rgba(239,68,68,0.2)" };
-    if (seat.status === "HOLDING") return { bg: "rgba(245,158,11,0.12)", border: "#f59e0b", color: "#d97706", shadow: "0 0 10px rgba(245,158,11,0.2)" };
-    
-    const seatType = seat.seatType;
-    switch (seatType) {
-      case "VIP": return { bg: "rgba(139,92,246,0.15)", border: "#8b5cf6", color: "#ddd6fe", shadow: "0 0 12px rgba(139,92,246,0.3)" };
-      case "COUPLE": return { bg: "rgba(236,72,153,0.15)", border: "#ec4899", color: "#fbcfe8", shadow: "0 0 12px rgba(236,72,153,0.3)" };
-      case "DISABLED": return { bg: "rgba(14,116,144,0.15)", border: "#06b6d4", color: "#67e8f9", shadow: "0 0 12px rgba(14,116,144,0.3)" };
-      default: return { bg: "rgba(59,130,246,0.1)", border: "#3b82f6", color: "#bfdbfe", shadow: "0 0 10px rgba(59,130,246,0.2)" };
-    }
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 110, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
-      <div style={{ background: "#0f172a", borderRadius: 20, width: "100%", maxWidth: 1280, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.4)", fontFamily: FONT, overflow: "hidden", border: "1px solid #1e293b" }}>
-        {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(56,189,248,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Armchair size={15} color="#38bdf8" />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.15em" }}>Sơ đồ ghế suất chiếu</span>
-            </div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#f8fafc" }}>{mName}</h3>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94a3b8" }}>
-              {rName}{presentationName ? ` · ${presentationName}` : ""} · {showtime.showDate} · {formatTime(showtime.startTime)} ~ {formatTime(showtime.endTime)} ·{" "}
-              <span style={{ color: "#10b981" }}>{availableSeats} trống</span> ·{" "}
-              <span style={{ color: "#f59e0b" }}>{holdingSeats} giữ</span> ·{" "}
-              <span style={{ color: "#ef4444" }}>{bookedSeats} đã đặt</span>
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background: "#1e293b", border: "none", cursor: "pointer", color: "#94a3b8", width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1, userSelect: "none" }}>
-          <div style={{ padding: "32px 12px", overflow: "auto", background: "#0b0f19", display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
-            {/* Glowing Screen */}
-            <div style={{
-              height: 48, width: "100%", maxWidth: 640, margin: "0 auto 64px",
-              background: "linear-gradient(to bottom, rgba(56,189,248,0.2), transparent)",
-              boxShadow: "0 10px 40px rgba(56,189,248,0.1)",
-              borderRadius: "50% 50% 0 0 / 100% 100% 0 0",
-              borderTop: "3px solid rgba(56,189,248,0.6)",
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
-              <span style={{ color: "rgba(56,189,248,0.5)", fontSize: 12, letterSpacing: "0.5em", fontWeight: 800 }}>Màn hình</span>
-            </div>
-
-            {loading ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, color: "#64748b" }}>
-                <Loader2 size={32} style={{ color: "#38bdf8", marginBottom: 16 }} className="animate-spin" />
-                <span style={{ fontSize: 14, letterSpacing: "0.05em" }}>Đang khởi tạo sơ đồ ghế...</span>
-              </div>
-            ) : seats.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "80px 0", color: "#64748b", fontSize: 14 }}>Chưa có ghế nào cho suất chiếu này.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center", width: "100%", maxWidth: 1000 }}>
-                {rows.map(([rowLabel, rowSeats]) => {
-                  return (
-                    <div key={rowLabel} style={{ display: "flex", alignItems: "center", position: "relative", paddingLeft: 46, minHeight: 42, width: "100%" }}>
-                      <div 
-                        style={{ 
-                          position: "absolute", left: 0,
-                          width: 38, height: 42, flexShrink: 0, fontWeight: 900, fontSize: 15, 
-                          color: "#475569", background: "transparent", border: "none",
-                          display: "flex", alignItems: "center", justifyContent: "center"
-                        }}
-                      >
-                        {rowLabel}
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", flex: 1 }}>
-                        {rowSeats.sort((a, b) => (a.seatNumber ?? 0) - (b.seatNumber ?? 0)).map(seat => {
-                          const sStyle = getSeatStyle(seat, false);
-                          const seatStatus = seat.status as ShowtimeSeatStatus;
-                          
-                          return (
-                            <div
-                              key={seat.showtimeSeatId}
-                              title={`${seat.seatCode} · ${SEAT_TYPE_CONFIG[seat.seatType as SeatType]?.label || 'Normal'} · ${SEAT_STATUS_CONFIG[seatStatus]?.label || seat.status}`}
-                              style={{
-                                width: 38, height: 38,
-                                borderRadius: "8px 8px 4px 4px",
-                                border: `1px solid ${sStyle.border}`,
-                                borderBottom: `4px solid ${sStyle.border}`,
-                                background: sStyle.bg,
-                                color: sStyle.color,
-                                cursor: "default",
-                                fontSize: 11, fontWeight: 800,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
-                                boxShadow: sStyle.shadow,
-                                outline: "none", position: "relative",
-                                opacity: 1
-                              }}
-                            >
-                              {seat.seatCode}
-                              {seat.seatType === "VIP" && seat.status !== "BOOKED" && (
-                                <div style={{ position: "absolute", top: -5, right: -5, width: 12, height: 12, borderRadius: "50%", background: "#8b5cf6", border: "2px solid #0f172a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <span style={{ fontSize: 7, color: "#fff" }}>★</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Legend */}
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", marginTop: 60, padding: "16px 28px", background: "rgba(30,41,59,0.7)", borderRadius: 16, border: "1px solid #1e293b", backdropFilter: "blur(4px)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(16,185,129,0.12)", border: "1px solid #10b981", borderBottom: "3px solid #10b981" }} />
-                Trống
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(245,158,11,0.12)", border: "1px solid #f59e0b", borderBottom: "3px solid #f59e0b" }} />
-                Đang giữ
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(239,68,68,0.12)", border: "1px solid #ef4444", borderBottom: "3px solid #ef4444" }} />
-                Đã đặt
-              </div>
-              <div style={{ width: 1, height: 18, background: "#334155", margin: "0 4px" }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(139,92,246,0.12)", border: "1px solid #8b5cf6", borderBottom: "3px solid #8b5cf6" }} />
-                VIP
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ package org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
@@ -19,6 +20,11 @@ import java.util.stream.Collectors;
 @Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiResponse<?>> handlingUnreadableRequest(HttpMessageNotReadableException exception) {
+        return buildErrorResponse(ErrorCode.VALIDATION_ERROR, "Dữ liệu yêu cầu không hợp lệ.");
+    }
 
     @ExceptionHandler(value = AppException.class)
     ResponseEntity<ApiResponse<?>> handlingAppException(AppException exception) {

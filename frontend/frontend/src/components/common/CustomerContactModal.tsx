@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, Send, X, MessageSquare, User, Mail, RefreshCw, Film } from "lucide-react";
 import { contactApi } from "@/api/contactApi";
+import { getApiErrorMessage } from "@/api/errors";
 import { useAuthToken } from "@/hooks/useAuthToken";
 import { userService } from "@/api/userApi";
 
@@ -42,7 +43,7 @@ export function CustomerContactModal({ isOpen, onClose }: CustomerContactModalPr
         // Ignore error if profile can't be fetched
       });
     }
-  }, [isOpen, token]);
+  }, [isOpen, token, senderEmail, senderName]);
 
   if (!isOpen) return null;
 
@@ -64,8 +65,8 @@ export function CustomerContactModal({ isOpen, onClose }: CustomerContactModalPr
       });
       // Luôn ghi nhận thành công và hiển thị lời cảm ơn tới khách hàng
       setIsSuccess(true);
-    } catch (err: any) {
-      setErrorMessage(err?.response?.data?.message || "Đã xảy ra lỗi kết nối khi gửi liên hệ. Vui lòng thử lại sau.");
+    } catch (err: unknown) {
+      setErrorMessage(getApiErrorMessage(err, "Đã xảy ra lỗi kết nối khi gửi liên hệ. Vui lòng thử lại sau."));
     } finally {
       setLoading(false);
     }

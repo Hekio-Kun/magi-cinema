@@ -11,14 +11,14 @@ const typeLabel: Record<PromotionCatalogResponse["type"], string> = {
   E_WALLET: "Ưu đãi ví điện tử",
 };
 
-const promotionTypeLabel = (promotion: PromotionCatalogItem) => {
+const promotionTypeLabel = (promotion: PromotionCatalogResponse) => {
   if (promotion.type === "MEMBER_TIER" && promotion.eligibleMemberTiers?.length) {
     return `Dành cho ${promotion.eligibleMemberTiers.join(", ")}`;
   }
   return typeLabel[promotion.type];
 };
 
-const iconFor = (type: PromotionCatalogItem["type"]) => {
+const iconFor = (type: PromotionCatalogResponse["type"]) => {
   if (type === "E_WALLET") return WalletCards;
   if (type === "BIRTHDAY" || type === "LEAP_DAY_BIRTHDAY") return Gift;
   return Tag;

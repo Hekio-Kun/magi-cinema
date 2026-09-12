@@ -21,6 +21,7 @@ export function setAuthToken(token: string): void {
     throw new Error("Không thể lưu token đăng nhập rỗng hoặc không hợp lệ.");
   }
   localStorage.setItem(TOKEN_KEY, normalized);
+  notifyAuthChange();
 }
 
 export function clearAuthToken(): void {

@@ -192,7 +192,12 @@ public class ApplicationInitConfig {
         }
 
         SYSTEM_ROLES.forEach((roleName, description) -> {
-            Role role = roleRepository.findById(roleName)
+            var existingRole = roleRepository.findById(roleName);
+            // Giữ quyền và mô tả mà quản trị viên đã chỉnh cho các vai trò có thể sửa.
+            if (existingRole.isPresent() && ("MANAGER".equals(roleName) || "STAFF".equals(roleName))) {
+                return;
+            }
+            Role role = existingRole
                     .orElseGet(() -> Role.builder()
                             .roleName(roleName)
                             .build());

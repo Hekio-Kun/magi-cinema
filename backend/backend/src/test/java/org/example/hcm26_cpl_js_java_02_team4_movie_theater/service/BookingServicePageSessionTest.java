@@ -58,6 +58,8 @@ class BookingServicePageSessionTest {
     @Mock DashboardNotificationService dashboardNotificationService;
     @Mock TransactionTemplate transactionTemplate;
     @Mock ShowtimeMapper showtimeMapper;
+    @Mock PromotionService promotionService;
+    @Mock MembershipService membershipService;
 
     @InjectMocks BookingService bookingService;
 

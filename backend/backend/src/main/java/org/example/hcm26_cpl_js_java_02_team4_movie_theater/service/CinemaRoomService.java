@@ -19,7 +19,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.CinemaRoo
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.SeatRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeSeatRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.validation.PageRequests;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -39,7 +39,7 @@ public class CinemaRoomService {
     CinemaRoomEditGuard cinemaRoomEditGuard;
 
     public PageResponse<CinemaRoomResponse> getCinemaRooms(String keyword, RoomStatus status, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequests.bounded(page, size, Sort.by("createdAt").descending());
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
         Page<CinemaRoom> roomPage;
 
@@ -59,9 +59,9 @@ public class CinemaRoomService {
         List<CinemaRoomResponse> responses = cinemaRoomMapper.toCinemaRoomResponseList(roomPage.getContent());
 
         return PageResponse.<CinemaRoomResponse>builder()
-                .page(page)
+                .page(pageable.getPageNumber())
                 .totalPages(roomPage.getTotalPages())
-                .size(size)
+                .size(pageable.getPageSize())
                 .totalElements(roomPage.getTotalElements())
                 .content(responses)
                 .build();

@@ -145,7 +145,7 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
   const [fillRemainingCapacity, setFillRemainingCapacity] = useState(false);
   const [plans, setPlans] = useState<Record<number, UiMoviePlan>>({});
   const [movieSearch, setMovieSearch] = useState("");
-  const [errors, setErrors] = useState<string[]>([]);
+  const [requestErrors, setRequestErrors] = useState<{ key: string; messages: string[] }>({ key: "", messages: [] });
   const [preview, setPreview] = useState<ShowtimePlannerPreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -514,7 +514,7 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
     });
   };
 
-  const validateSelection = () => {
+  const getSelectionErrors = () => {
     const next: string[] = [];
     if (!fromDate || !toDate) next.push("Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.");
     if (fromDate < today) next.push("Ngày bắt đầu không được nằm trong quá khứ.");
@@ -553,11 +553,10 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
       next.push(visibleCapacityError || "Chưa tính được số suất tối đa. Vui lòng kiểm tra lại cấu hình.");
     }
     if (step !== 3 && visibleCapacityLoading) next.push("Hệ thống đang tính số suất tối đa, vui lòng chờ trong giây lát.");
-    setErrors(next);
-    return next.length === 0;
+    return next;
   };
 
-  const validateQuotas = () => {
+  const getQuotaErrors = () => {
     const next: string[] = [];
     if (visibleCapacity && totalRequested > visibleCapacity.totalMaximum) {
       next.push(`Toàn kế hoạch đang yêu cầu ${totalRequested} suất nhưng tối đa chỉ xếp được ${visibleCapacity.totalMaximum} suất trong khoảng ngày đã chọn.`);
@@ -606,38 +605,19 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
         .filter((issue) => issue.severity === "ERROR")
         .forEach((issue) => next.push(issue.message));
     }
-    setErrors(next);
-    return next.length === 0;
+    return next;
   };
 
-  useEffect(() => {
-    if (step === 1) {
-      validateSelection();
-    } else if (step === 2) {
-      if (validateSelection()) {
-        validateQuotas();
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    step,
-    fromDate,
-    toDate,
-    roomIds,
-    openingTime,
-    latestFinishTime,
-    primeStartTime,
-    primeEndTime,
-    turnaroundMinutes,
-    selectedMovies,
-    plans,
-    visibleCapacity,
-    visibleCapacityLoading,
-    visibleCapacityError,
-    visibleQuotaPreview,
-    visibleQuotaPreviewError,
-    quotaCalculationPending,
-  ]);
+  const validationKey = JSON.stringify({ step, plan: currentPlanRequest });
+  const selectionErrors = step === 3 ? [] : getSelectionErrors();
+  const validationErrors = selectionErrors.length ? selectionErrors : step === 2 ? getQuotaErrors() : [];
+  const errors = [
+    ...validationErrors,
+    ...(requestErrors.key === validationKey ? requestErrors.messages : []),
+  ];
+  const setErrors = (messages: string[]) => setRequestErrors({ key: validationKey, messages });
+  const validateSelection = () => getSelectionErrors().length === 0;
+  const validateQuotas = () => getQuotaErrors().length === 0;
 
   const buildRequest = (lockedItems: ShowtimePlannerPreviewItem[] = []): ShowtimePlannerPreviewRequest => ({
     ...currentPlanRequest,
@@ -653,7 +633,7 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
     })),
   });
 
-  const requestPreview = async (keepLocked = false) => {
+  const requestPreview = async (keepLocked = false, maximizeSchedule = fillRemainingCapacity) => {
     if (!validateSelection() || !validateQuotas()) return;
     setPreviewLoading(true);
     setErrors([]);
@@ -665,7 +645,8 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
       const preservedItems = keepLocked
         ? currentItems.filter((item) => item.locked || dirtyKeys.has(item.clientKey))
         : [];
-      const response = await showtimeApi.previewPlanner(buildRequest(preservedItems));
+      const response = await showtimeApi.previewPlanner({ ...buildRequest(preservedItems), maximizeSchedule });
+      setFillRemainingCapacity(maximizeSchedule);
       setPreview({
         ...response,
         items: response.items.map((item) => ({
@@ -990,8 +971,8 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
                   </div>
                   <button
                     type="button"
-                    disabled={!visibleCapacity}
-                    onClick={() => autoDistributeCapacity(visibleCapacity)}
+                    disabled={!visibleCapacity || validationErrors.length > 0 || previewLoading || quotaCalculationPending}
+                    onClick={() => requestPreview(false, true)}
                     className="flex items-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs px-3 py-2 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RefreshCw size={13} /> Tự động tính & tối ưu lại
@@ -1232,8 +1213,8 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
           <div className="text-xs text-slate-500">Bản xem trước chưa ghi dữ liệu cho đến khi bạn xác nhận.</div>
           <div className="flex gap-2">
             {step > 1 && <button type="button" onClick={() => { setErrors([]); setStep(step - 1); }} className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"><ArrowLeft size={15} /> Quay lại</button>}
-            {step === 1 && <button type="button" disabled={errors.length > 0} onClick={() => { if (validateSelection()) { setRoomIds((current) => current.filter((id) => compatibleRoomIdsForSelection.includes(id))); setStep(2); } }} className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed">Nhập số suất <ArrowRight size={15} /></button>}
-            {step === 2 && <button type="button" disabled={errors.length > 0 || previewLoading || quotaCalculationPending} onClick={() => requestPreview(false)} className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed">{previewLoading || quotaCalculationPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {quotaCalculationPending ? "Đang tính sức xếp" : fillRemainingCapacity ? "Sinh lịch tối đa" : `Xem trước ${totalRequested} suất`}</button>}
+            {step === 1 && <button type="button" disabled={validationErrors.length > 0} onClick={() => { if (validateSelection()) { setRoomIds((current) => current.filter((id) => compatibleRoomIdsForSelection.includes(id))); setStep(2); } }} className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed">Nhập số suất <ArrowRight size={15} /></button>}
+            {step === 2 && <button type="button" disabled={validationErrors.length > 0 || previewLoading || quotaCalculationPending} onClick={() => requestPreview(false)} className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed">{previewLoading || quotaCalculationPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {quotaCalculationPending ? "Đang tính sức xếp" : fillRemainingCapacity ? "Sinh lịch tối đa" : `Xem trước ${totalRequested} suất`}</button>}
             {step === 3 && <button type="button" disabled={!preview?.complete || dirtyKeys.size > 0 || confirming} onClick={confirm} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">{confirming ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Xác nhận tạo {preview?.totalScheduled ?? 0} suất</button>}
           </div>
         </div>

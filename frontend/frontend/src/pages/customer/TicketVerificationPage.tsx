@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { bookingApi, type TicketVerificationResponse } from "@/api/bookingApi";
+import { getApiErrorMessage } from "@/api/errors";
 import { formatPresentationLabelFromFields } from "@/utils/presentation";
 
 const money = (value = 0) => value.toLocaleString("vi-VN", {
@@ -137,8 +138,8 @@ export default function TicketVerificationPage() {
                       await bookingApi.markTicketAsScanned(token);
                       setTicket(prev => prev ? { ...prev, isScanned: true, validTicket: false, verificationMessage: "Vé đã được sử dụng (quét mã) trước đó." } : prev);
                       alert("Đã xác nhận quét vé thành công!");
-                    } catch (err: any) {
-                      alert(err.response?.data?.message || "Lỗi khi xác nhận quét vé. Vui lòng đăng nhập với tài khoản nhân viên.");
+                    } catch (err: unknown) {
+                      alert(getApiErrorMessage(err, "Lỗi khi xác nhận quét vé. Vui lòng đăng nhập với tài khoản nhân viên."));
                     }
                   }}
                   className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition-all"

@@ -1,5 +1,6 @@
 package org.example.hcm26_cpl_js_java_02_team4_movie_theater.service;
 
+import jakarta.persistence.EntityManager;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,6 +52,7 @@ public class SeatSelectionService {
     ShowtimeSeatRepository showtimeSeatRepository;
     UserRepository userRepository;
     SeatRealtimeService seatRealtimeService;
+    EntityManager entityManager;
 
     @NonFinal
     @Value("${seat-selection.hold-duration-seconds:180}")
@@ -74,7 +77,7 @@ public class SeatSelectionService {
             return emptyResponse(showtimeId);
         }
 
-        List<ShowtimeSeat> lockedSeats = showtimeSeatRepository.findAllByIdForUpdate(
+        List<ShowtimeSeat> lockedSeats = lockAndRefreshSeats(
                 currentSelection.stream().map(ShowtimeSeat::getShowtimeSeatId).toList());
         LocalDateTime now = LocalDateTime.now();
         List<ShowtimeSeat> activeSelection = new ArrayList<>();
@@ -127,7 +130,7 @@ public class SeatSelectionService {
             return;
         }
 
-        List<ShowtimeSeat> lockedSeats = showtimeSeatRepository.findAllByIdForUpdate(
+        List<ShowtimeSeat> lockedSeats = lockAndRefreshSeats(
                 userSelection.stream().map(ShowtimeSeat::getShowtimeSeatId).toList());
         List<ShowtimeSeat> releasedSeats = new ArrayList<>();
         List<ShowtimeSeat> seatsToSave = new ArrayList<>();
@@ -179,7 +182,7 @@ public class SeatSelectionService {
 
         List<ShowtimeSeat> lockedSeats = idsToLock.isEmpty()
                 ? List.of()
-                : showtimeSeatRepository.findAllByIdForUpdate(idsToLock);
+                : lockAndRefreshSeats(idsToLock);
         Map<Long, ShowtimeSeat> seatsById = lockedSeats.stream()
                 .collect(Collectors.toMap(ShowtimeSeat::getShowtimeSeatId, Function.identity()));
         if (requestedIds.stream().anyMatch(id -> !seatsById.containsKey(id))) {
@@ -284,7 +287,7 @@ public class SeatSelectionService {
             return;
         }
 
-        List<ShowtimeSeat> lockedSeats = showtimeSeatRepository.findAllByIdForUpdate(
+        List<ShowtimeSeat> lockedSeats = lockAndRefreshSeats(
                 expiredCandidates.stream().map(ShowtimeSeat::getShowtimeSeatId).toList());
         List<ShowtimeSeat> releasedSeats = lockedSeats.stream()
                 .filter(seat -> seat.getStatus() == ShowtimeSeatStatus.HOLDING)
@@ -320,6 +323,18 @@ public class SeatSelectionService {
         if (request.getShowtimeSeatIds().size() > MAX_SEATS_PER_SELECTION) {
             throw new AppException(ErrorCode.INVALID_SEAT_QUANTITY);
         }
+        if (request.getShowtimeSeatIds().stream().anyMatch(java.util.Objects::isNull)
+                || request.getClientToken().length() > 100) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Thông tin giữ ghế không hợp lệ.");
+        }
+    }
+
+    private List<ShowtimeSeat> lockAndRefreshSeats(Collection<Long> ids) {
+        List<ShowtimeSeat> seats = showtimeSeatRepository.findAllByIdForUpdate(ids);
+        // Ghế có thể đã nằm trong persistence context trước khi chờ khoá.
+        // Đọc lại để không ghi đè trạng thái vừa được booking hoặc phiên khác cập nhật.
+        seats.forEach(entityManager::refresh);
+        return seats;
     }
 
     private void validateShowtimeForSelection(Showtime showtime) {
