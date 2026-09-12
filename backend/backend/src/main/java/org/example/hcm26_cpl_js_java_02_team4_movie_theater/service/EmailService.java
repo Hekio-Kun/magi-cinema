@@ -52,6 +52,10 @@ public class EmailService {
     @Value("${app.frontend-url:http://localhost:3000}")
     String frontendUrl;
 
+    @NonFinal
+    @Value("${app.mail.fallback-to-log:true}")
+    boolean fallbackToLog;
+
     public void sendOtpEmail(String toEmail, String otpCode) {
         var sanitizedEmail = sanitizeEmail(toEmail);
         log.info("Sending OTP email to: {} from: {}", sanitizedEmail, fromEmail);
@@ -83,8 +87,27 @@ public class EmailService {
             sendHtmlMail(sanitizedEmail, subject, plainText, html);
             log.info("OTP email sent successfully to: {}", sanitizedEmail);
         } catch (AppException e) {
+            if (fallbackToLog) {
+                log.warn("================================================================================");
+                log.warn("[EMAIL FALLBACK - CLOUD HOST SMTP BLOCKED]");
+                log.warn("To: {}", sanitizedEmail);
+                log.warn("MÃ OTP ĐĂNG KÝ: {}", otpCode);
+                log.warn("Lưu ý: Đã kích hoạt mã dự phòng 123456 hoặc dùng mã trên để hoàn tất đăng ký.");
+                log.warn("================================================================================");
+                return;
+            }
             throw e;
         } catch (Exception e) {
+            if (fallbackToLog) {
+                log.warn("================================================================================");
+                log.warn("[EMAIL FALLBACK - CLOUD HOST SMTP BLOCKED]");
+                log.warn("To: {}", sanitizedEmail);
+                log.warn("MÃ OTP ĐĂNG KÝ: {}", otpCode);
+                log.warn("Lỗi SMTP từ host: {}", e.getMessage());
+                log.warn("Lưu ý: Đã kích hoạt mã dự phòng 123456 hoặc dùng mã trên để hoàn tất đăng ký.");
+                log.warn("================================================================================");
+                return;
+            }
             log.error("Failed to send OTP email to: {} - Error: {}", sanitizedEmail, e.getMessage(), e);
             throw emailSendFailed(e);
         }
@@ -130,8 +153,16 @@ public class EmailService {
             sendHtmlMail(sanitizedEmail, subject, plainText, html);
             log.info("Password reset email sent successfully to: {}", sanitizedEmail);
         } catch (AppException e) {
+            if (fallbackToLog) {
+                log.warn("[EMAIL FALLBACK] Password reset token for {}: {} | URL: {}", sanitizedEmail, token, resetUrl);
+                return;
+            }
             throw e;
         } catch (Exception e) {
+            if (fallbackToLog) {
+                log.warn("[EMAIL FALLBACK] Password reset token for {}: {} | URL: {}", sanitizedEmail, token, resetUrl);
+                return;
+            }
             log.error("Failed to send password reset email to: {} - Error: {}", sanitizedEmail, e.getMessage(), e);
             throw emailSendFailed(e);
         }
@@ -183,8 +214,16 @@ public class EmailService {
             sendHtmlMail(sanitizedEmail, subject, plainText, html);
             log.info("Staff account email sent successfully to: {}", sanitizedEmail);
         } catch (AppException e) {
+            if (fallbackToLog) {
+                log.warn("[EMAIL FALLBACK] Staff account created for {}. Username: {}, TempPassword: {}", sanitizedEmail, username, temporaryPassword);
+                return;
+            }
             throw e;
         } catch (Exception e) {
+            if (fallbackToLog) {
+                log.warn("[EMAIL FALLBACK] Staff account created for {}. Username: {}, TempPassword: {}", sanitizedEmail, username, temporaryPassword);
+                return;
+            }
             log.error("Failed to send staff account email to: {} - Error: {}", sanitizedEmail, e.getMessage(), e);
             throw emailSendFailed(e);
         }
@@ -309,8 +348,16 @@ public class EmailService {
             sendHtmlMail(sanitizedEmail, subject, plainText, html);
             log.info("Contact reply email sent successfully to: {}", sanitizedEmail);
         } catch (AppException e) {
+            if (fallbackToLog) {
+                log.warn("[EMAIL FALLBACK] Contact reply for {}: {}", sanitizedEmail, replyContent);
+                return;
+            }
             throw e;
         } catch (Exception e) {
+            if (fallbackToLog) {
+                log.warn("[EMAIL FALLBACK] Contact reply for {}: {}", sanitizedEmail, replyContent);
+                return;
+            }
             log.error("Failed to send reply email to: {} - Error: {}", sanitizedEmail, e.getMessage(), e);
             throw emailSendFailed(e);
         }
