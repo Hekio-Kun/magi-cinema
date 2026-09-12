@@ -84,7 +84,12 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
+      await Promise.race([
+        authService.logout(),
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+    } catch {
+      // Ignore errors on logout API
     } finally {
       clearAuthToken();
       navigate("/");

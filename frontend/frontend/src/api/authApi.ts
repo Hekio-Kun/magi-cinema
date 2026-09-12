@@ -31,7 +31,7 @@ export const authService = {
 
     logout: async () => {
         try {
-            await apiClient.post('/auth/logout');
+            await apiClient.post('/auth/logout', null, { timeout: 2000 });
         } catch (error) {
             console.warn('Backend logout failed or offline, proceeding with local cleanup:', error);
         }
