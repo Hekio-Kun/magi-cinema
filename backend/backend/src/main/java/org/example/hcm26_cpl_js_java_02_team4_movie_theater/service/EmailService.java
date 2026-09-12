@@ -57,6 +57,10 @@ public class EmailService {
     String brevoApiKey;
 
     @NonFinal
+    @Value("${app.mail.brevo-sender-email:${BREVO_SENDER_EMAIL:lehaiduy1900@gmail.com}}")
+    String brevoSenderEmail;
+
+    @NonFinal
     @Value("${spring.mail.username}")
     String fromEmail;
 
@@ -340,12 +344,6 @@ public class EmailService {
         var sanitizedEmail = sanitizeEmail(toEmail);
         log.info("Sending contact reply email to: {} from: {}", sanitizedEmail, fromEmail);
 
-        if (fromEmail == null || fromEmail.isBlank() || mailPassword == null || mailPassword.isBlank()) {
-            log.warn("SMTP credentials not configured (MAIL_USERNAME/MAIL_PASSWORD). Mocking successful email send to: {}", sanitizedEmail);
-            log.info("[MOCK EMAIL] To: {} | Subject: {} | Content:\n{}", sanitizedEmail, subject, replyContent);
-            return;
-        }
-
         String plainText = replyContent + "\n\nTrân trọng,\nBan Quản Lý MagiCinema";
         String html = renderLayout(
                 "Phản hồi Góp ý",
@@ -415,9 +413,15 @@ public class EmailService {
         }
         mailSender.send(message);
     }
-
     private void sendViaBrevoApi(String toEmail, String subject, String plainText, String htmlContent, byte[] ticketQrPng) throws Exception {
-        var senderEmail = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : SUPPORT_EMAIL;
+        String senderEmail;
+        if (brevoSenderEmail != null && !brevoSenderEmail.isBlank()) {
+            senderEmail = brevoSenderEmail.trim();
+        } else if (fromEmail != null && !fromEmail.isBlank() && !fromEmail.contains("magicinema.system@gmail.com")) {
+            senderEmail = fromEmail.trim();
+        } else {
+            senderEmail = "lehaiduy1900@gmail.com";
+        }
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sender", Map.of("name", BRAND_NAME, "email", senderEmail));
