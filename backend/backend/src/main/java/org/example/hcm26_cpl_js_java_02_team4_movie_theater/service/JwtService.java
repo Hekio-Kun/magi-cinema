@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.StringJoiner;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -46,6 +47,7 @@ public class JwtService {
         }
 
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(user.getUsername())
                 .issuer("movie-theater.com")
                 .issuedAt(now)

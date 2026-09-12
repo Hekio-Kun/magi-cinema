@@ -29,6 +29,14 @@ export const authService = {
         return response.data;
     },
 
+    logout: async () => {
+        try {
+            await apiClient.post('/auth/logout');
+        } catch (error) {
+            console.warn('Backend logout failed or offline, proceeding with local cleanup:', error);
+        }
+    },
+
     forgotPassword: async (email: string) => {
         const response = await apiClient.post('/auth/forgot-password', { email });
         return response.data;

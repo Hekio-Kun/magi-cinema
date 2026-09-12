@@ -33,6 +33,8 @@ public class PasswordResetService {
     PasswordResetTokenRepository passwordResetTokenRepository;
     EmailService emailService;
     PasswordEncoder passwordEncoder;
+    TokenBlacklistService tokenBlacklistService;
+    LoginAttemptService loginAttemptService;
 
     @NonFinal
     @Value("${app.security.reset-token.expiration-minutes:10}")
@@ -69,8 +71,18 @@ public class PasswordResetService {
         }
         User user = resetToken.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setPasswordChangedAt(LocalDateTime.now());
         userRepository.save(user);
         passwordResetTokenRepository.delete(resetToken);
-        log.info("Password has been reset successfully for user: {}", user.getUsername());
+
+        if (tokenBlacklistService != null) {
+            tokenBlacklistService.revokeAllTokensForUser(user.getUsername());
+        }
+        if (loginAttemptService != null) {
+            loginAttemptService.loginSucceeded(user.getUsername());
+            loginAttemptService.loginSucceeded(user.getEmail());
+        }
+
+        log.info("Password has been reset successfully and prior tokens revoked for user: {}", user.getUsername());
     }
 }

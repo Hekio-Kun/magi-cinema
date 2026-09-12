@@ -62,4 +62,11 @@ class AuthControllerValidationTest {
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(authenticationService);
     }
+
+    @Test
+    void logoutSucceedsAndCallsAuthenticationService() throws Exception {
+        mvc.perform(post("/auth/logout").header("Authorization", "Bearer token-123"))
+                .andExpect(status().isOk());
+        org.mockito.Mockito.verify(authenticationService).logout("Bearer token-123");
+    }
 }

@@ -3,16 +3,17 @@ package org.example.hcm26_cpl_js_java_02_team4_movie_theater.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.AuthenticationRequest;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.AuthenticationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.ForgotPasswordRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.RegisterRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.ResendOtpRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.ResetPasswordRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.VerifyOtpRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
-import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.auth.AuthenticationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.user.UserResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.AuthenticationService;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.PasswordResetService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +30,15 @@ public class AuthController {
     public ApiResponse<AuthenticationResponse> login(@Valid @RequestBody AuthenticationRequest request) {
         return ApiResponse.<AuthenticationResponse>builder()
                 .result(authenticationService.authenticate(request))
+                .build();
+    }
+
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+        authenticationService.logout(authHeader);
+        return ApiResponse.<Void>builder()
+                .message("Đăng xuất thành công.")
                 .build();
     }
 

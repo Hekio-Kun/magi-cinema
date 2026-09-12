@@ -83,6 +83,7 @@ public class UserService {
     BookingRepository bookingRepository;
     ReviewRepository reviewRepository;
     PasswordResetTokenRepository passwordResetTokenRepository;
+    TokenBlacklistService tokenBlacklistService;
 
     private static final String ADMIN_USERNAME = "admin";
     private static final String ADMIN_ROLE = "ADMIN";
@@ -412,8 +413,12 @@ public class UserService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(LocalDateTime.now());
         userRepository.save(user);
-        log.info("User changed password - ID: {}", user.getUserId());
+        if (tokenBlacklistService != null) {
+            tokenBlacklistService.revokeAllTokensForUser(user.getUsername());
+        }
+        log.info("User changed password and revoked prior tokens - ID: {}", user.getUserId());
     }
 
     @Transactional

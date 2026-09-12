@@ -27,6 +27,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.TokenBlacklistService;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
@@ -57,6 +63,7 @@ public class SecurityConfig {
 
     ObjectMapper objectMapper;
     Environment environment;
+    TokenBlacklistService tokenBlacklistService;
 
     @NonFinal
     @Value("${jwt.signerKey:}")
@@ -96,6 +103,7 @@ public class SecurityConfig {
                                 "/auth/register/resend-otp",
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
+                                "/auth/logout",
                                 "/payment/zalopay/callback",
                                 "/payment/momo/ipn",
                                 "/contact/submit").permitAll()
@@ -237,9 +245,15 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
         var secretKeySpec = new SecretKeySpec(resolveSignerKey().getBytes(StandardCharsets.UTF_8), "HS512");
-        return NimbusJwtDecoder.withSecretKey(secretKeySpec)
+        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withSecretKey(secretKeySpec)
                 .macAlgorithm(MacAlgorithm.HS512)
                 .build();
+
+        OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefault();
+        OAuth2TokenValidator<Jwt> blacklistValidator = new TokenBlacklistValidator(tokenBlacklistService);
+        jwtDecoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(defaultValidator, blacklistValidator));
+
+        return jwtDecoder;
     }
 
     @Bean
@@ -263,14 +277,23 @@ public class SecurityConfig {
                 return null;
             }
             // Đối với các GET endpoint công khai (dành cho khách vãng lai duyệt danh mục phim, lịch chiếu, khuyến mãi...),
-            // nếu token gửi lên đã hết hạn hoặc không đúng định dạng, bỏ qua token để request được tiếp tục như khách vãng lai
+            // nếu token gửi lên đã hết hạn, đã bị thu hồi hoặc không đúng định dạng, bỏ qua token để request được tiếp tục như khách vãng lai
             // thay vì chặn lại và trả về lỗi 401 làm giao diện bị treo.
             if ("GET".equalsIgnoreCase(request.getMethod()) && isPublicGetPath(request.getRequestURI())) {
                 try {
                     var signedJWT = SignedJWT.parse(token);
-                    var exp = signedJWT.getJWTClaimsSet().getExpirationTime();
-                    if (exp != null && exp.before(new java.util.Date())) {
-                        log.debug("Bỏ qua token đã hết hạn trên public endpoint GET {}.", request.getRequestURI());
+                    var claims = signedJWT.getJWTClaimsSet();
+                    var exp = claims.getExpirationTime();
+                    String jti = claims.getJWTID();
+                    String subject = claims.getSubject();
+                    var iat = claims.getIssueTime();
+                    boolean expired = exp != null && exp.before(new java.util.Date());
+                    boolean revoked = tokenBlacklistService != null && (
+                            tokenBlacklistService.isRevoked(token, jti)
+                            || (iat != null && tokenBlacklistService.isUserTokenRevoked(subject, iat.toInstant()))
+                    );
+                    if (expired || revoked) {
+                        log.debug("Bỏ qua token đã hết hạn hoặc bị thu hồi trên public endpoint GET {}.", request.getRequestURI());
                         return null;
                     }
                 } catch (Exception e) {

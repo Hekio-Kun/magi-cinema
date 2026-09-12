@@ -184,6 +184,7 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [signInHovered, setSignInHovered] = useState(false);
+  const [isLockedOut, setIsLockedOut] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -191,20 +192,21 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
+    setIsLockedOut(false);
     setIsLoading(true);
 
     if (!username.trim() || !password.trim()) {
-      setErrorMessage("Vui lòng nhập tên đăng nhập và mật khẩu.");
+      setErrorMessage("Vui lòng nhập tên đăng nhập (hoặc email) và mật khẩu.");
       setIsLoading(false);
       return;
     }
 
     try {
-      const data = await authService.login({ username, password });
+      const data = await authService.login({ username: username.trim(), password });
 
       if (data.authenticated) {
         setSuccessMessage("Đăng nhập thành công! Đang chuyển hướng...");
-        localStorage.setItem("username", username);
+        localStorage.setItem("username", username.trim());
         localStorage.removeItem("user_avatar");
         setAuthToken(data.token);
         
@@ -236,11 +238,23 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
           console.error("Failed to fetch profile during login", err);
         }
       } else {
-        setErrorMessage("Đăng nhập không hợp lệ");
+        setErrorMessage("Tên đăng nhập hoặc mật khẩu không chính xác.");
         setIsLoading(false);
       }
-    } catch {
-      setErrorMessage("Đăng nhập không hợp lệ");
+    } catch (err: unknown) {
+      let msg = "Tên đăng nhập hoặc mật khẩu không chính xác.";
+      let locked = false;
+      if (typeof err === "object" && err !== null && "response" in err) {
+        const res = (err as { response?: { status?: number; data?: { code?: number; message?: string } } }).response;
+        if (res?.status === 429 || res?.data?.code === 1028) {
+          locked = true;
+        }
+        if (res?.data?.message) {
+          msg = res.data.message;
+        }
+      }
+      setIsLockedOut(locked);
+      setErrorMessage(msg);
       setIsLoading(false);
     }
   };
@@ -290,8 +304,8 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
         <InputField
           icon={<User size={16} />}
           type="text"
-          label="Tên đăng nhập"
-          placeholder="Nhập tên đăng nhập"
+          label="Tên đăng nhập hoặc Email"
+          placeholder="Nhập tên đăng nhập hoặc email"
           value={username}
           onChange={setUsername}
           disabled={isLoading}
@@ -333,8 +347,31 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
         </div>
 
         {errorMessage && (
-          <div style={{ background: "rgba(220,38,38,0.06)", border: "1.5px solid rgba(220,38,38,0.2)", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13 }}>
-            {errorMessage}
+          <div style={{ background: "rgba(220,38,38,0.06)", border: "1.5px solid rgba(220,38,38,0.2)", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13, lineHeight: 1.5 }}>
+            <p style={{ margin: 0 }}>{errorMessage}</p>
+            {isLockedOut && (
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                style={{
+                  marginTop: 8,
+                  background: "#DC2626",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-block",
+                  transition: "opacity 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+              >
+                Đặt lại mật khẩu ngay
+              </button>
+            )}
           </div>
         )}
 

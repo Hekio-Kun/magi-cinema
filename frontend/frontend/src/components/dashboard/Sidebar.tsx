@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { clearAuthToken } from "@/utils/authSession";
 import { useNavigate } from "react-router-dom";
+import { authService } from "@/api/authApi";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccessDashboardPage } from "@/utils/dashboardAccess";
 
@@ -81,9 +82,13 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
     }))
     .filter((group) => group.items.length > 0);
 
-  const handleLogout = () => {
-    clearAuthToken();
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      clearAuthToken();
+      navigate("/");
+    }
   };
 
   return (

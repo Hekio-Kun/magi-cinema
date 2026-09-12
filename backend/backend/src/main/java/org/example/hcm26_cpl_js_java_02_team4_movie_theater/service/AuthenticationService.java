@@ -44,6 +44,8 @@ public class AuthenticationService {
     JwtService jwtService;
     EmailService emailService;
     OtpStore otpStore;
+    TokenBlacklistService tokenBlacklistService;
+    LoginAttemptService loginAttemptService;
 
     private static final String DEFAULT_USER_ROLE = "CUSTOMER";
     private static final long OTP_TTL_SECONDS = 300;
@@ -110,9 +112,6 @@ public class AuthenticationService {
         String inputOtp = request.getOtp() != null ? request.getOtp().trim() : "";
 
         OtpStore.ConsumeResult otpResult = otpStore.consume(emailKey, inputOtp);
-        if (otpResult != OtpStore.ConsumeResult.VERIFIED && "123456".equals(inputOtp)) {
-            otpResult = OtpStore.ConsumeResult.VERIFIED;
-        }
         if (otpResult == OtpStore.ConsumeResult.EXPIRED) {
             throw new AppException(ErrorCode.OTP_EXPIRED);
         }
@@ -169,31 +168,77 @@ public class AuthenticationService {
         return userMapper.toUserResponse(user);
     }
 
+    @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        String identifier = request.getUsername() == null ? "" : request.getUsername().trim();
+
+        if (loginAttemptService != null && loginAttemptService.isBlocked(identifier)) {
+            throw new AppException(ErrorCode.LOGIN_ATTEMPTS_EXCEEDED);
+        }
+
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(Locale.ROOT)))
+                .orElse(null);
+
+        if (user == null) {
+            if (loginAttemptService != null) {
+                loginAttemptService.loginFailed(identifier);
+            }
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+        }
+
+        if (loginAttemptService != null && loginAttemptService.isBlocked(user.getUsername())) {
+            throw new AppException(ErrorCode.LOGIN_ATTEMPTS_EXCEEDED);
+        }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new AppException(ErrorCode.INVALID_PASSWORD);
+            boolean justBlocked = false;
+            if (loginAttemptService != null) {
+                justBlocked = loginAttemptService.loginFailed(user.getUsername());
+                if (identifier.contains("@")) {
+                    loginAttemptService.loginFailed(identifier);
+                }
+            }
+            if (justBlocked) {
+                throw new AppException(ErrorCode.LOGIN_ATTEMPTS_EXCEEDED);
+            }
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         }
 
         if (user.getStatus() == null || user.getStatus() == UserStatus.DELETED) {
-            throw new AppException(ErrorCode.USER_NOT_FOUND);
+            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        if (user.getStatus() == UserStatus.INACTIVE) {
+        if (user.getStatus() == UserStatus.INACTIVE || user.getStatus() == UserStatus.BANNED) {
             throw new AppException(ErrorCode.USER_LOCKED);
         }
 
-        if (user.getStatus() == UserStatus.BANNED) {
-            throw new AppException(ErrorCode.USER_LOCKED);
+        // Đăng nhập thành công -> xóa bỏ bộ đếm vi phạm
+        if (loginAttemptService != null) {
+            loginAttemptService.loginSucceeded(user.getUsername());
+            loginAttemptService.loginSucceeded(identifier);
         }
+
+        // Cập nhật thời điểm đăng nhập thành công
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
 
         String token = jwtService.generateToken(user);
         return AuthenticationResponse.builder()
                 .token(token)
                 .isAuthenticated(true)
                 .build();
+    }
+
+    public void logout(String authHeaderOrToken) {
+        if (authHeaderOrToken == null || authHeaderOrToken.isBlank()) {
+            return;
+        }
+        String token = authHeaderOrToken.trim();
+        if (token.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            token = token.substring(7).trim();
+        }
+        tokenBlacklistService.blacklistToken(token);
     }
 
     private String generateOtp() {

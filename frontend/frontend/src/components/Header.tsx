@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Film, Menu, User, LogOut, Search, ChevronDown, Ticket, Settings, Loader2, Crown } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { authService } from "@/api/authApi";
 import { movieService, type MovieResponse } from "@/api/movieApi";
 import { canAccessDashboardFromScopes } from "@/utils/dashboardAccess";
 import { clearAuthToken } from "@/utils/authSession";
@@ -145,9 +146,13 @@ function HeaderContent({ pathname }: { pathname: string }) {
 
 
 
-  const handleLogout = () => {
-    clearAuthToken();
-    window.location.href = "/";
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      clearAuthToken();
+      window.location.href = "/";
+    }
   };
 
   const closeSearch = () => {

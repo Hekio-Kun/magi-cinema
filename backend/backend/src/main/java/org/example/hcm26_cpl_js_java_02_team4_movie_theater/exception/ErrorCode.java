@@ -37,6 +37,8 @@ public enum ErrorCode implements BaseErrorCode {
     CURRENT_PASSWORD_INVALID(1024, "Mật khẩu hiện tại không chính xác.", HttpStatus.BAD_REQUEST),
     NEW_PASSWORD_SAME_AS_CURRENT(1025, "Mật khẩu mới phải khác mật khẩu hiện tại.", HttpStatus.BAD_REQUEST),
     EMAIL_SEND_FAILED(1026, "Không thể gửi email. Vui lòng kiểm tra cấu hình email hệ thống.", HttpStatus.SERVICE_UNAVAILABLE),
+    INVALID_CREDENTIALS(1027, "Tên đăng nhập hoặc mật khẩu không chính xác.", HttpStatus.BAD_REQUEST),
+    LOGIN_ATTEMPTS_EXCEEDED(1028, "Tài khoản tạm thời bị khóa do nhập sai mật khẩu quá 5 lần. Vui lòng thử lại sau 15 phút hoặc sử dụng chức năng Quên mật khẩu.", HttpStatus.TOO_MANY_REQUESTS),
     MOVIE_NOT_FOUND(2001, "Không tìm thấy phim!", HttpStatus.NOT_FOUND),
     MOVIE_ALREADY_EXISTS(2002, "Phim đã tồn tại trong hệ thống!", HttpStatus.BAD_REQUEST),
     MOVIE_DATE_INVALID(2010, "Ngày kết thúc phải sau ngày khởi chiếu!", HttpStatus.BAD_REQUEST),
