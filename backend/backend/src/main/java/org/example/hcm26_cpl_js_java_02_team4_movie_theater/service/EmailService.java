@@ -12,17 +12,26 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Showtime;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Ticket;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.AppException;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.ErrorCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -39,6 +48,11 @@ public class EmailService {
 
     JavaMailSender mailSender;
     TicketVerificationService ticketVerificationService;
+    ObjectMapper objectMapper;
+
+    @NonFinal
+    @Value("${app.mail.brevo-api-key:${BREVO_API_KEY:}}")
+    String brevoApiKey;
 
     @NonFinal
     @Value("${spring.mail.username}")
@@ -368,12 +382,20 @@ public class EmailService {
     }
 
     private void sendHtmlMail(String toEmail, String subject, String plainText, String htmlContent, byte[] ticketQrPng) throws Exception {
-        if (fromEmail == null || fromEmail.isBlank() || mailPassword == null || mailPassword.isBlank()) {
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED,
-                    "Chưa cấu hình email hệ thống. Hãy đặt MAIL_USERNAME và MAIL_PASSWORD bằng Gmail App Password.");
-        }
         if (toEmail == null || toEmail.isBlank()) {
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Địa chỉ email người nhận không hợp lệ.");
+        }
+
+        // Ưu tiên 1: Gửi qua Brevo HTTP API (Port 443 - không bao giờ bị Cloud chặn)
+        if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+            sendViaBrevoApi(toEmail, subject, plainText, htmlContent, ticketQrPng);
+            return;
+        }
+
+        // Ưu tiên 2: Gửi qua Gmail SMTP truyền thống (cho local hoặc khi mở port 587)
+        if (fromEmail == null || fromEmail.isBlank() || mailPassword == null || mailPassword.isBlank()) {
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED,
+                    "Chưa cấu hình email hệ thống. Hãy đặt BREVO_API_KEY hoặc MAIL_USERNAME và MAIL_PASSWORD.");
         }
 
         var message = mailSender.createMimeMessage();
@@ -390,6 +412,44 @@ public class EmailService {
             helper.addInline("ticket-qr", new ByteArrayResource(ticketQrPng), "image/png");
         }
         mailSender.send(message);
+    }
+
+    private void sendViaBrevoApi(String toEmail, String subject, String plainText, String htmlContent, byte[] ticketQrPng) throws Exception {
+        var senderEmail = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : SUPPORT_EMAIL;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sender", Map.of("name", BRAND_NAME, "email", senderEmail));
+        payload.put("to", List.of(Map.of("email", toEmail)));
+        payload.put("subject", subject);
+        payload.put("htmlContent", htmlContent);
+        if (plainText != null && !plainText.isBlank()) {
+            payload.put("textContent", plainText);
+        }
+        if (ticketQrPng != null && ticketQrPng.length > 0) {
+            payload.put("attachment", List.of(Map.of(
+                    "name", "ticket-qr.png",
+                    "content", Base64.getEncoder().encodeToString(ticketQrPng)
+            )));
+        }
+
+        String json = objectMapper.writeValueAsString(payload);
+
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
+                .header("accept", "application/json")
+                .header("api-key", brevoApiKey.trim())
+                .header("content-type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+                .timeout(Duration.ofSeconds(15))
+                .build();
+
+        var response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            log.info("Email sent successfully via Brevo HTTP API to: {} (status: {})", toEmail, response.statusCode());
+        } else {
+            log.error("Failed to send email via Brevo HTTP API: {} - {}", response.statusCode(), response.body());
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Brevo HTTP API failed with status " + response.statusCode() + ": " + response.body());
+        }
     }
 
     private AppException emailSendFailed(Exception cause) {
