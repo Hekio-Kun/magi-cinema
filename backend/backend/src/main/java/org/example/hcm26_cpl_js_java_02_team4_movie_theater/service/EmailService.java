@@ -48,7 +48,9 @@ public class EmailService {
 
     JavaMailSender mailSender;
     TicketVerificationService ticketVerificationService;
-    ObjectMapper objectMapper;
+
+    @NonFinal
+    ObjectMapper objectMapper = new ObjectMapper();
 
     @NonFinal
     @Value("${app.mail.brevo-api-key:${BREVO_API_KEY:}}")
