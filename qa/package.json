@@ -7,7 +7,11 @@
     "test:ui": "playwright test",
     "test:ui:headed": "playwright test --headed",
     "test:hybrid": "powershell -ExecutionPolicy Bypass -File .\\run-hybrid.ps1",
-    "test:load": "k6 run k6/load.js"
+    "test:load": "k6 run k6/load.js",
+    "swarm": "node swarm.mjs",
+    "swarm:100": "node swarm.mjs 100",
+    "swarm:500": "node swarm.mjs 500",
+    "swarm:1000": "node swarm.mjs 1000"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

@@ -48,3 +48,24 @@ $env:K6_HOLD = '2m'
 ```
 
 Mặc định mọi test có side effect đều bị chặn khi `API_BASE_URL` không phải local. Chỉ bật `ALLOW_REMOTE_BOT_TEST=true` hoặc `ALLOW_REMOTE_LOAD=true` sau khi đã dùng database kiểm thử riêng. Bộ test không gọi thanh toán MoMo/ZaloPay thật và không tạo booking thanh toán thành công tự động.
+
+## 🚀 Giả lập 1.000 người truy cập đồng thời (Virtual Bot Swarm)
+
+Để giả lập 1.000 người dùng online cùng lúc (kết nối WebSocket presence và duyệt web như người thật, làm huy hiệu trên Admin Dashboard nhảy lên `🟢 1000 trực tuyến`):
+
+```powershell
+cd qa
+
+# Chạy mặc định 1.000 bots:
+npm run swarm
+
+# Hoặc tùy chọn số lượng bot:
+npm run swarm:100     # 100 bots
+npm run swarm:500     # 500 bots
+npm run swarm:1000    # 1.000 bots
+
+# Hoặc dùng script PowerShell:
+.\run-swarm.ps1 -Bots 1000
+```
+
+> **Lưu ý:** Toàn bộ 1.000 bot ảo chỉ tiêu thụ khoảng **~50MB RAM** trên máy tính của bạn. Nhấn **Ctrl + C** trong terminal bất cứ lúc nào để ngắt kết nối toàn bộ bot một cách an toàn.
