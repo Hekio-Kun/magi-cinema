@@ -20,4 +20,5 @@ public class DashboardResponse {
 
     private List<MovieResponse> topMovies;
     private List<DashboardShowtimeResponse> recentShowtimes;
+    private FinancialSummaryResponse financialSummary;
 }

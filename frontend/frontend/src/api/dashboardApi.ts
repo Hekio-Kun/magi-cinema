@@ -24,11 +24,77 @@ export interface DashboardResponse {
     totalShowtimes: number;
     topMovies: MovieResponse[];
     recentShowtimes: DashboardShowtimeResponse[];
+    financialSummary?: FinancialSummaryResponse | null;
+}
+
+export interface FinancialDailyResponse {
+    date: string;
+    bookings: number;
+    tickets: number;
+    grossSales: number;
+    discountAmount: number;
+    netSales: number;
+    ticketRevenue: number;
+    concessionRevenue: number;
+}
+
+export interface FinancialPaymentMethodResponse {
+    paymentMethod: string;
+    bookings: number;
+    amount: number;
+}
+
+export interface FinancialMovieResponse {
+    movieId: number;
+    movieName: string;
+    bookings: number;
+    tickets: number;
+    netSales: number;
+}
+
+export interface FinancialRoomResponse {
+    roomId: number;
+    roomName: string;
+    seatCapacity: number;
+    bookedSeats: number;
+    occupancyRate: number;
+}
+
+export interface FinancialSummaryResponse {
+    fromDate: string;
+    toDate: string;
+    totalBookings: number;
+    successfulBookings: number;
+    cancelledBookings: number;
+    pendingBookings: number;
+    ticketsSold: number;
+    seatCapacity: number;
+    bookedSeats: number;
+    occupancyRate: number;
+    grossSales: number;
+    discountAmount: number;
+    netSales: number;
+    ticketRevenue: number;
+    concessionRevenue: number;
+    cancelledAmount: number;
+    pendingAmount: number;
+    averageOrderValue: number;
+    cashCollected: number;
+    bankTransferCollected: number;
+    momoCollected: number;
+    zaloPayCollected: number;
+    otherCollected: number;
+    daily: FinancialDailyResponse[];
+    paymentMethods: FinancialPaymentMethodResponse[];
+    topMovies: FinancialMovieResponse[];
+    roomOccupancy: FinancialRoomResponse[];
 }
 
 export const dashboardService = {
-    getStats: async (): Promise<DashboardResponse> => {
-        const response = await apiClient.get('/dashboard/stats');
+    getStats: async (fromDate?: string, toDate?: string): Promise<DashboardResponse> => {
+        const response = await apiClient.get('/dashboard/stats', {
+            params: { fromDate, toDate },
+        });
         return response.data.result;
     },
 };

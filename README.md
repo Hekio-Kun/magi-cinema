@@ -69,6 +69,32 @@ Yêu cầu: Docker Engine/Desktop đang chạy và Docker Compose. Chạy lệnh
 
    Bản Docker gọi API cùng origin qua `/api`; Nginx bỏ tiền tố này khi chuyển tới Spring Boot. `/ws/seat-updates` được chuyển tiếp cho cập nhật ghế. Frontend vẫn có thể dùng API host riêng qua build argument `VITE_API_URL`.
 
+### Nạp dữ liệu demo cho Magi Cinema
+
+Database mặc định không tự nạp dữ liệu mẫu. Khi cần một môi trường trình diễn có phim đang chiếu, sơ đồ ghế, suất chiếu trong 9 ngày, đồ ăn, combo, khuyến mãi, gói thành viên và tài khoản khách hàng mẫu, chạy backend với profile `demo`:
+
+```powershell
+cd backend\backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=demo"
+```
+
+Hoặc nếu chạy file JAR:
+
+```powershell
+java -jar backend.jar --spring.profiles.active=demo
+```
+
+Profile này chỉ chạy `demo-data.sql`, có thể chạy lại nhiều lần mà không nhân bản dữ liệu. Tài khoản khách hàng mẫu là `demo.customer` với mật khẩu `password`; chỉ dùng trong database local trình diễn. Môi trường mặc định vẫn giữ `spring.sql.init.mode=never` để không tự ghi dữ liệu vào database có sẵn.
+
+### Báo cáo doanh thu và dòng tiền
+
+Trang **Báo cáo & thống kê** lấy số liệu trực tiếp từ booking, vé, đồ ăn/combo và sơ đồ ghế. Bộ lọc ngày truyền vào API quản trị `GET /dashboard/stats?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD` (mặc định 7 ngày gần nhất, tối đa 367 ngày).
+
+- Chỉ booking `SUCCESS` được tính vào tiền đã thu/doanh thu thuần và phân bổ theo tiền mặt, chuyển khoản, MoMo, ZaloPay.
+- Booking `PENDING` được tách riêng thành khoản cần xử lý, không cộng vào doanh thu.
+- Booking `CANCELLED` được hiển thị riêng để đối soát; hệ thống hiện không hoàn tiền nên không tự trừ khỏi tiền đã thu.
+- Doanh thu được tách thành vé và đồ ăn/combo, kèm số vé bán, giá trị đơn trung bình, doanh thu theo phim và tỷ lệ lấp đầy từng phòng.
+
    Callback từ MoMo/ZaloPay cần URL HTTPS công khai do bạn cấu hình: đường dẫn qua Nginx là `/api/payment/momo/ipn` và `/api/payment/zalopay/callback`; gọi thẳng Spring Boot dùng `/payment/...`. `localhost` chỉ là ví dụ cấu hình local, cổng thanh toán bên ngoài không truy cập được địa chỉ này.
 
 ## Chạy và kiểm tra mã nguồn

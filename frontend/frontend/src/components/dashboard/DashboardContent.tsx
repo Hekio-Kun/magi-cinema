@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { CalendarDays, CheckCircle2, Clock3, Loader2, MonitorPlay, ShieldCheck } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Loader2, MonitorPlay, ShieldCheck, Ticket, WalletCards } from "lucide-react";
 import { KPICards } from "./KPICards";
 import { TopMovies } from "./TopMovies";
 import { ShowtimeSchedule } from "./ShowtimeSchedule";
@@ -25,6 +25,10 @@ function OperationStatusCard({ icon, title, value, caption, color }: {
       <div style={{ marginTop: 4, fontSize: 12, color: "#6B7280", lineHeight: 1.5 }}>{caption}</div>
     </div>
   );
+}
+
+function formatMoney(value?: number | null) {
+  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value || 0);
 }
 
 export function DashboardContent() {
@@ -119,10 +123,34 @@ export function DashboardContent() {
         />
         <OperationStatusCard
           icon={<CheckCircle2 size={17} />}
-          title="Số liệu chưa hiển thị"
-          value="Đã ẩn"
-          caption="Doanh thu, đơn đặt vé gần đây và tỷ lệ lấp đầy ghế chưa có API thống kê thực tế."
-          color="#6B7280"
+          title="Doanh thu 7 ngày"
+          value={formatMoney(stats?.financialSummary?.netSales)}
+          caption={`${stats?.financialSummary?.successfulBookings || 0} booking thành công · tiền đã thu theo booking SUCCESS`}
+          color="#16A34A"
+        />
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16, marginBottom: 20 }}>
+        <OperationStatusCard
+          icon={<WalletCards size={17} />}
+          title="Đang chờ thanh toán"
+          value={formatMoney(stats?.financialSummary?.pendingAmount)}
+          caption={`${stats?.financialSummary?.pendingBookings || 0} booking chưa được tính vào doanh thu`}
+          color="#2563EB"
+        />
+        <OperationStatusCard
+          icon={<Ticket size={17} />}
+          title="Vé đã bán trong kỳ"
+          value={(stats?.financialSummary?.ticketsSold || 0).toLocaleString("vi-VN")}
+          caption={`Lấp đầy ${stats?.financialSummary?.occupancyRate?.toFixed(1) || "0.0"}% trên các suất chiếu`}
+          color="#D97706"
+        />
+        <OperationStatusCard
+          icon={<CheckCircle2 size={17} />}
+          title="Doanh thu đồ ăn/combo"
+          value={formatMoney(stats?.financialSummary?.concessionRevenue)}
+          caption="Đã tách riêng để theo dõi hiệu quả quầy concession"
+          color="#7C3AED"
         />
       </section>
 
