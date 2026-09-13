@@ -1,5 +1,6 @@
 package org.example.hcm26_cpl_js_java_02_team4_movie_theater.controller;
 
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -21,9 +22,19 @@ public class RoleController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_MANAGE')")
-    public ApiResponse<RoleResponse> create(@RequestBody RoleRequest request) {
+    public ApiResponse<RoleResponse> create(@Valid @RequestBody RoleRequest request) {
         return ApiResponse.<RoleResponse>builder()
                 .result(roleService.create(request))
+                .build();
+    }
+
+    @PutMapping("/{role}")
+    @PreAuthorize("hasAuthority('ROLE_MANAGE')")
+    public ApiResponse<RoleResponse> update(
+            @PathVariable String role,
+            @Valid @RequestBody RoleRequest request) {
+        return ApiResponse.<RoleResponse>builder()
+                .result(roleService.update(role, request))
                 .build();
     }
 

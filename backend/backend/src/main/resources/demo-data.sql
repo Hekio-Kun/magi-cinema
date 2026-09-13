@@ -11,6 +11,27 @@ INSERT INTO roles (role_name, description)
 VALUES ('CUSTOMER', 'Registered customer account')
 ON CONFLICT (role_name) DO NOTHING;
 
+INSERT INTO roles (role_name, description)
+VALUES
+    ('STAFF', 'Daily ticket and customer support operations'),
+    ('MANAGER', 'Cinema operation and content management')
+ON CONFLICT (role_name) DO NOTHING;
+
+INSERT INTO permission (name, description)
+VALUES
+    ('SCHEDULE_MANAGE', 'Create staff schedules and manage attendance'),
+    ('BOOKING_VIEW', 'View booking history and reports'),
+    ('BOOKING_MANAGE', 'Manage bookings and ticket cancellations')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO role_permissions (role_name, name)
+VALUES
+    ('MANAGER', 'SCHEDULE_MANAGE'),
+    ('MANAGER', 'BOOKING_VIEW'),
+    ('STAFF', 'BOOKING_VIEW'),
+    ('STAFF', 'BOOKING_MANAGE')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO genre (name, description)
 VALUES
     ('Hành động', 'Phim hành động kịch tính'),
@@ -418,6 +439,56 @@ WHERE NOT EXISTS (
     SELECT 1 FROM user_profiles
     WHERE user_id = '11111111-1111-4111-8111-111111111111'
 );
+
+-- Fictional staff accounts for testing the staff-management workspace.
+-- Password for all demo accounts: `password` (local demo only).
+INSERT INTO users (user_id, username, email, password_hash, status, created_at)
+VALUES
+    ('22222222-2222-4222-8222-222222222222', 'demo.manager', 'demo.manager@magicinema.local',
+     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', CURRENT_TIMESTAMP),
+    ('33333333-3333-4333-8333-333333333333', 'demo.cashier', 'demo.cashier@magicinema.local',
+     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', CURRENT_TIMESTAMP),
+    ('44444444-4444-4444-8444-444444444444', 'demo.concession', 'demo.concession@magicinema.local',
+     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', CURRENT_TIMESTAMP)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO user_roles (user_id, role_name)
+VALUES
+    ('22222222-2222-4222-8222-222222222222', 'MANAGER'),
+    ('33333333-3333-4333-8333-333333333333', 'STAFF'),
+    ('44444444-4444-4444-8444-444444444444', 'STAFF')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO user_profiles (user_id, full_name, phone_number, date_of_birth, gender, address, hire_date, identity_card, email, is_active, loyalty_points, created_at, updated_at)
+VALUES
+    ('22222222-2222-4222-8222-222222222222', 'Trần Quốc Huy', '0900000201', DATE '1990-04-12', 'MALE', 'Quận 1, TP. Hồ Chí Minh', DATE '2021-06-01', '079090000201', 'demo.manager@magicinema.local', true, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('33333333-3333-4333-8333-333333333333', 'Lê Minh Thư', '0900000202', DATE '1998-09-21', 'FEMALE', 'Quận Bình Thạnh, TP. Hồ Chí Minh', DATE '2023-02-15', '079098000202', 'demo.cashier@magicinema.local', true, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('44444444-4444-4444-8444-444444444444', 'Phạm Gia Bảo', '0900000203', DATE '1996-01-30', 'MALE', 'Quận 10, TP. Hồ Chí Minh', DATE '2022-11-10', '079096000203', 'demo.concession@magicinema.local', true, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id) DO NOTHING;
+
+-- A rolling sample schedule and attendance history makes the module useful on
+-- first launch while remaining idempotent across demo restarts.
+INSERT INTO staff_shift_assignment (staff_user_id, work_date, shift_type, planned_start, planned_end, status, note, created_by_user_id, created_at, updated_at)
+VALUES
+    ('33333333-3333-4333-8333-333333333333', CURRENT_DATE - 1, 'MORNING', TIME '09:00', TIME '17:00', 'SCHEDULED', 'Ca quầy vé mẫu', '22222222-2222-4222-8222-222222222222', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('44444444-4444-4444-8444-444444444444', CURRENT_DATE - 1, 'EVENING', TIME '15:00', TIME '23:00', 'SCHEDULED', 'Ca quầy bắp nước mẫu', '22222222-2222-4222-8222-222222222222', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('33333333-3333-4333-8333-333333333333', CURRENT_DATE, 'AFTERNOON', TIME '13:00', TIME '21:00', 'SCHEDULED', 'Ca quầy vé hôm nay', '22222222-2222-4222-8222-222222222222', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('44444444-4444-4444-8444-444444444444', CURRENT_DATE + 1, 'EVENING', TIME '15:00', TIME '23:00', 'SCHEDULED', 'Ca quầy bắp nước ngày mai', '22222222-2222-4222-8222-222222222222', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (staff_user_id, work_date, shift_type) DO NOTHING;
+
+INSERT INTO staff_attendance (assignment_id, check_in, check_out, status, worked_minutes, note, recorded_by_user_id, created_at, updated_at)
+SELECT a.assignment_id,
+       (CURRENT_DATE - 1) + TIME '09:07',
+       (CURRENT_DATE - 1) + TIME '17:02',
+       'LATE', 475, 'Mẫu chấm công có đi trễ 7 phút', '22222222-2222-4222-8222-222222222222', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM staff_shift_assignment a
+WHERE a.staff_user_id = '33333333-3333-4333-8333-333333333333'
+  AND a.work_date = CURRENT_DATE - 1 AND a.shift_type = 'MORNING'
+  AND NOT EXISTS (SELECT 1 FROM staff_attendance sa WHERE sa.assignment_id = a.assignment_id);
+
+INSERT INTO cashier_shift (shift_code, cashier_user_id, status, reconciliation_status, opening_cash, expected_cash, actual_cash, variance, cash_sales, transfer_sales, ticket_sales, concession_sales, opened_note, closing_note, approval_note, opened_at, closed_at, approved_by_user_id, approved_at)
+SELECT 'DEMO-SHIFT-0001', '33333333-3333-4333-8333-333333333333', 'CLOSED', 'APPROVED', 1000000, 2450000, 2450000, 0, 1450000, 1000000, 1950000, 500000, 'Ca mẫu ngày hôm qua', 'Đã bàn giao đủ tiền', 'Đối soát mẫu hợp lệ', (CURRENT_DATE - 1) + TIME '08:45', (CURRENT_DATE - 1) + TIME '17:10', '22222222-2222-4222-8222-222222222222', (CURRENT_DATE - 1) + TIME '17:30'
+WHERE NOT EXISTS (SELECT 1 FROM cashier_shift WHERE shift_code = 'DEMO-SHIFT-0001');
 
 -- A successful sample booking makes account history and occupancy reports
 -- useful immediately. Its ticket seat is deliberately fixed and local.

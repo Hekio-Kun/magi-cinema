@@ -1,5 +1,6 @@
 package org.example.hcm26_cpl_js_java_02_team4_movie_theater.controller;
 
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -21,7 +22,7 @@ public class PermissionController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_MANAGE')")
-    public ApiResponse<PermissionResponse> create(@RequestBody PermissionRequest request) {
+    public ApiResponse<PermissionResponse> create(@Valid @RequestBody PermissionRequest request) {
         return ApiResponse.<PermissionResponse>builder()
                 .result(permissionService.create(request))
                 .build();

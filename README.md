@@ -84,7 +84,7 @@ Hoặc nếu chạy file JAR:
 java -jar backend.jar --spring.profiles.active=demo
 ```
 
-Profile này chỉ chạy `demo-data.sql`, có thể chạy lại nhiều lần mà không nhân bản dữ liệu. Tài khoản khách hàng mẫu là `demo.customer` với mật khẩu `password`; chỉ dùng trong database local trình diễn. Môi trường mặc định vẫn giữ `spring.sql.init.mode=never` để không tự ghi dữ liệu vào database có sẵn.
+Profile này chỉ chạy `demo-data.sql`, có thể chạy lại nhiều lần mà không nhân bản dữ liệu. Các tài khoản mẫu (đều dùng mật khẩu `password`) là `demo.customer`, `demo.manager`, `demo.cashier` và `demo.concession`; chỉ dùng trong database local trình diễn. Nhân viên mẫu đã có lịch ca, chấm công và một ca thu ngân đã đối soát để kiểm thử các màn hình vận hành. Môi trường mặc định vẫn giữ `spring.sql.init.mode=never` để không tự ghi dữ liệu vào database có sẵn.
 
 ### Báo cáo doanh thu và dòng tiền
 
@@ -94,6 +94,9 @@ Trang **Báo cáo & thống kê** lấy số liệu trực tiếp từ booking, 
 - Booking `PENDING` được tách riêng thành khoản cần xử lý, không cộng vào doanh thu.
 - Booking `CANCELLED` được hiển thị riêng để đối soát; hệ thống hiện không hoàn tiền nên không tự trừ khỏi tiền đã thu.
 - Doanh thu được tách thành vé và đồ ăn/combo, kèm số vé bán, giá trị đơn trung bình, doanh thu theo phim và tỷ lệ lấp đầy từng phòng.
+- **Ca thu ngân & đối soát** bắt buộc quầy mở ca trước khi bán, ghi nhận tiền đầu ca/cuối ca và chờ quản lý duyệt chênh lệch.
+- **Lịch ca & chấm công** kiểm tra trùng khung giờ, cho nhân viên vào/ra ca và cho quản lý ghi nhận đi trễ, vắng hoặc nghỉ phép.
+- **Nhật ký nhân viên** lưu các thay đổi tài khoản, lịch ca và thao tác chấm công; báo cáo hiệu suất trong cùng trang thống kê tổng hợp doanh thu theo nhân viên.
 
    Callback từ MoMo/ZaloPay cần URL HTTPS công khai do bạn cấu hình: đường dẫn qua Nginx là `/api/payment/momo/ipn` và `/api/payment/zalopay/callback`; gọi thẳng Spring Boot dùng `/payment/...`. `localhost` chỉ là ví dụ cấu hình local, cổng thanh toán bên ngoài không truy cập được địa chỉ này.
 

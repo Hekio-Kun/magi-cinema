@@ -42,7 +42,7 @@ public class SeatService {
     CinemaRoomEditGuard cinemaRoomEditGuard;
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_STAFF', 'ROLE_CUSTOMER')")
+    @PreAuthorize("hasAnyAuthority('SHOWTIME_MANAGE', 'BOOKING_VIEW', 'ROLE_CUSTOMER')")
     public PageResponse<SeatResponse> getSeats(Long cinemaRoomId, SeatStatus status, int page, int size) {
         Pageable pageable = PageRequests.bounded(page, size, Sort.by("seatRow").ascending().and(Sort.by("seatNumber").ascending()));
         Page<Seat> seatPage;
@@ -68,13 +68,13 @@ public class SeatService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_STAFF', 'ROLE_CUSTOMER')")
+    @PreAuthorize("hasAnyAuthority('SHOWTIME_MANAGE', 'BOOKING_VIEW', 'ROLE_CUSTOMER')")
     public SeatResponse getSeatById(Long seatId) {
         return seatMapper.toSeatResponse(getSeat(seatId));
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public SeatResponse createSeat(SeatCreationRequest request) {
         CinemaRoom cinemaRoom = getCinemaRoom(request.getCinemaRoomId());
         cinemaRoomEditGuard.ensureEditable(cinemaRoom.getCinemaRoomId());
@@ -97,7 +97,7 @@ public class SeatService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public SeatResponse updateSeat(Long seatId, SeatUpdateRequest request) {
         Seat seat = getSeat(seatId);
         Long currentRoomId = seat.getCinemaRoom().getCinemaRoomId();
@@ -125,7 +125,7 @@ public class SeatService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public void deleteSeat(Long seatId) {
         Seat seat = getSeat(seatId);
         cinemaRoomEditGuard.ensureEditable(seat.getCinemaRoom().getCinemaRoomId());
@@ -135,7 +135,7 @@ public class SeatService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public void bulkUpdateSeats(org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.seat.SeatBulkUpdateRequest request) {
         List<Seat> seats = seatRepository.findAllById(request.getSeatIds());
         Set<Long> affectedRoomIds = seats.stream()

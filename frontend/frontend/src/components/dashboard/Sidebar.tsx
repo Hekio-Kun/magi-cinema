@@ -19,6 +19,7 @@ import {
   Crown,
   Globe2,
   MessageSquare,
+  FileText,
 } from "lucide-react";
 import { clearAuthToken } from "@/utils/authSession";
 import { useNavigate } from "react-router-dom";
@@ -48,6 +49,8 @@ const NAV_GROUPS = [
     group: "Khách hàng & bán hàng",
     items: [
       { icon: ShoppingCart,    label: "Bán vé tại quầy" },
+      { icon: Popcorn,         label: "Bán bắp nước tại quầy" },
+      { icon: BadgeDollarSign, label: "Ca thu ngân & đối soát" },
       { icon: Globe2,          label: "Đặt vé online" },
       { icon: Ticket,          label: "Đặt vé tại quầy" },
       { icon: Popcorn,         label: "Combo & bắp nước" },
@@ -61,6 +64,8 @@ const NAV_GROUPS = [
     group: "Hệ thống",
     items: [
       { icon: UserCog,         label: "Nhân viên" },
+      { icon: Clock,           label: "Lịch ca & chấm công" },
+      { icon: FileText,        label: "Nhật ký nhân viên" },
       { icon: Shield,          label: "Vai trò & quyền hạn" },
       { icon: Settings,        label: "Cài đặt" },
     ],

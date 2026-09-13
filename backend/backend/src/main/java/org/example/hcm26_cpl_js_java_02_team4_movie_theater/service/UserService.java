@@ -84,6 +84,7 @@ public class UserService {
     ReviewRepository reviewRepository;
     PasswordResetTokenRepository passwordResetTokenRepository;
     TokenBlacklistService tokenBlacklistService;
+    ComboAuditLogService auditLogService;
 
     private static final String ADMIN_USERNAME = "admin";
     private static final String ADMIN_ROLE = "ADMIN";
@@ -128,6 +129,16 @@ public class UserService {
         Map<String, UserProfile> profileMap = userProfileRepository.findAll().stream()
                 .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
         return users.stream()
+                .map(user -> toDetailResponse(user, profileMap.get(user.getUserId())))
+                .toList();
+    }
+
+    @PreAuthorize("hasAnyAuthority('USER_VIEW', 'SCHEDULE_MANAGE')")
+    public List<UserDetailResponse> getStaffUsers() {
+        Map<String, UserProfile> profileMap = userProfileRepository.findAll().stream()
+                .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+        return userRepository.findAll().stream()
+                .filter(user -> user.getStatus() != UserStatus.DELETED && isStaffAccount(user))
                 .map(user -> toDetailResponse(user, profileMap.get(user.getUserId())))
                 .toList();
     }
@@ -223,6 +234,11 @@ public class UserService {
                 .build();
 
         userProfileRepository.saveAndFlush(profile);
+        if (auditLogService != null) {
+            auditLogService.record("STAFF_ACCOUNT", null, user.getUsername(), "CREATE",
+                    "Tạo tài khoản nhân viên với vai trò " + request.getRoleName(), null,
+                    "userId=" + user.getUserId() + ", role=" + request.getRoleName(), null);
+        }
         emailService.sendStaffAccountEmail(
                 emailKey,
                 request.getFullName().trim(),
@@ -454,6 +470,9 @@ public class UserService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         guardProtectedAdminAccount(user, "Không thể chỉnh sửa tài khoản quản trị hệ thống.");
 
+        UserStatus previousStatus = user.getStatus();
+        Set<String> previousRoles = roleNames(user.getRoles());
+
         if (request.getStatus() != null) {
             user.setStatus(request.getStatus());
         }
@@ -464,6 +483,11 @@ public class UserService {
         }
 
         userRepository.save(user);
+
+        if (!java.util.Objects.equals(previousStatus, user.getStatus())
+                || !previousRoles.equals(roleNames(user.getRoles()))) {
+            revokeTokensAfterSecurityChange(user, "thay đổi vai trò hoặc trạng thái");
+        }
 
         UserProfile profile = userProfileRepository.findById(userId).orElse(null);
         if (profile != null) {
@@ -502,6 +526,12 @@ public class UserService {
             userProfileRepository.save(profile);
         }
 
+        if (auditLogService != null && isStaffAccount(user)) {
+            auditLogService.record("STAFF_ACCOUNT", null, user.getUsername(), "UPDATE",
+                    "Cập nhật thông tin tài khoản nhân viên", previousStatus + "/" + previousRoles,
+                    user.getStatus() + "/" + roleNames(user.getRoles()), null);
+        }
+
         log.info("User updated - ID: {}", userId);
         return toDetailResponse(user, profile);
     }
@@ -509,11 +539,22 @@ public class UserService {
     @Transactional
     @PreAuthorize("hasAuthority('USER_UPDATE')")
     public void updateUserStatus(String userId, UserStatus newStatus) {
+        if (newStatus == null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Trạng thái tài khoản không được để trống.");
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         guardProtectedAdminAccount(user, "Không thể thay đổi trạng thái tài khoản quản trị hệ thống.");
+        UserStatus previousStatus = user.getStatus();
         user.setStatus(newStatus);
         userRepository.save(user);
+        if (!java.util.Objects.equals(previousStatus, newStatus)) {
+            revokeTokensAfterSecurityChange(user, "thay đổi trạng thái");
+        }
+        if (auditLogService != null && isStaffAccount(user)) {
+            auditLogService.record("STAFF_ACCOUNT", null, user.getUsername(), "STATUS_CHANGE",
+                    "Cập nhật trạng thái tài khoản", previousStatus, newStatus, null);
+        }
         log.info("User status updated - ID: {}, new status: {}", userId, newStatus);
     }
 
@@ -525,6 +566,11 @@ public class UserService {
         guardProtectedAdminAccount(user, "Không thể vô hiệu hóa tài khoản quản trị hệ thống.");
         user.setStatus(UserStatus.DELETED);
         userRepository.save(user);
+        revokeTokensAfterSecurityChange(user, "vô hiệu hóa tài khoản");
+        if (auditLogService != null && isStaffAccount(user)) {
+            auditLogService.record("STAFF_ACCOUNT", null, user.getUsername(), "DEACTIVATE",
+                    "Vô hiệu hóa tài khoản nhân viên", UserStatus.ACTIVE, UserStatus.DELETED, null);
+        }
         log.info("User soft-deleted - ID: {}", userId);
     }
 
@@ -551,6 +597,8 @@ public class UserService {
                     ErrorCode.VALIDATION_ERROR,
                     "Không thể xóa vĩnh viễn nhân viên vì tài khoản còn lịch sử đặt vé hoặc đánh giá cần được lưu.");
         }
+
+        revokeTokensAfterSecurityChange(user, "xóa vĩnh viễn tài khoản");
 
         try {
             passwordResetTokenRepository.findByUser(user)
@@ -597,8 +645,33 @@ public class UserService {
                 .anyMatch(role -> ADMIN_ROLE.equalsIgnoreCase(role.getRoleName()));
     }
 
+    private Set<String> roleNames(Set<Role> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return Set.of();
+        }
+        return roles.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(Role::getRoleName)
+                .filter(java.util.Objects::nonNull)
+                .map(roleName -> roleName.trim().toUpperCase(java.util.Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private void revokeTokensAfterSecurityChange(User user, String reason) {
+        if (user == null || user.getUsername() == null) {
+            return;
+        }
+        // Persist the cutoff so the JWT remains invalid after a service restart.
+        user.setPasswordChangedAt(LocalDateTime.now());
+        userRepository.save(user);
+        if (tokenBlacklistService != null) {
+            tokenBlacklistService.revokeAllTokensForUser(user.getUsername());
+        }
+        log.info("Revoked active tokens for user '{}' after {}.", user.getUsername(), reason);
+    }
+
     private Role resolveAssignableRole(String roleName) {
-        String normalizedRoleName = roleName == null ? "" : roleName.trim().toUpperCase();
+        String normalizedRoleName = roleName == null ? "" : roleName.trim().toUpperCase(java.util.Locale.ROOT);
         if (normalizedRoleName.isBlank()) {
             throw new AppException(ErrorCode.ROLE_NOT_FOUND);
         }

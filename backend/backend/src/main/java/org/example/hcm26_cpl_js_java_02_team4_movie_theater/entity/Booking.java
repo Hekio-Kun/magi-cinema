@@ -75,6 +75,10 @@ public class Booking {
     @JoinColumn(name = "sold_by_user_id")
     User soldBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cashier_shift_id")
+    CashierShift cashierShift;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "counter_customer_type", length = 20)
     CounterCustomerType counterCustomerType;

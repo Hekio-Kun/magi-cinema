@@ -178,7 +178,8 @@ public class ApplicationInitConfig {
                 {"PROMOTION_MANAGE", "Manage promotions and promotion usage"},
                 {"CONTACT_MANAGE", "Manage customer contacts and feedback"},
                 {"BOOKING_VIEW", "View booking history and reports"},
-                {"BOOKING_MANAGE", "Manage bookings and ticket cancellations"}
+                {"BOOKING_MANAGE", "Manage bookings and ticket cancellations"},
+                {"SCHEDULE_MANAGE", "Create staff schedules and manage attendance"}
         };
 
         Map<String, Permission> permissionMap = new LinkedHashMap<>();
@@ -230,6 +231,10 @@ public class ApplicationInitConfig {
             role.setPermissions(permissions);
             roleRepository.save(role);
         });
+        // Preserve custom manager/staff roles while adding this capability to
+        // existing databases in an idempotent way.
+        jdbcTemplate.update("INSERT INTO role_permissions (role_name, name) VALUES ('ADMIN', 'SCHEDULE_MANAGE') ON CONFLICT DO NOTHING");
+        jdbcTemplate.update("INSERT INTO role_permissions (role_name, name) VALUES ('MANAGER', 'SCHEDULE_MANAGE') ON CONFLICT DO NOTHING");
     }
 
     private void migrateLegacyUserRole() {

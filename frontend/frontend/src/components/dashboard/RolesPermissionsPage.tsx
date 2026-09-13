@@ -453,7 +453,7 @@ export function RolesPermissionsPage() {
     if (!selectedRole || selectedProtected || saving) return;
     try {
       setSaving(true);
-      const updatedRole = await userService.createRole({
+      const updatedRole = await userService.updateRole(selectedRole.roleName, {
         roleName: selectedRole.roleName,
         description: selectedRole.description,
         permissions: Array.from(draftPermissions),

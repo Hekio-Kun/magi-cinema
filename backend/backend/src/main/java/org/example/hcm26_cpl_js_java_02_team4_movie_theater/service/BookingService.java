@@ -91,6 +91,7 @@ public class BookingService {
     TicketPricingService ticketPricingService;
     MembershipService membershipService;
     EntityManager entityManager;
+    CashierShiftService cashierShiftService;
 
     private static final Set<ShowtimeStatus> UNBOOKABLE_SHOWTIME_STATUSES = Set.of(
             ShowtimeStatus.CANCELLED,
@@ -482,11 +483,13 @@ public class BookingService {
                 : new HashSet<>(request.getU22SeatIds());
 
         boolean counterBooking = isCounterOperator();
+        CashierShift cashierShift = counterBooking ? cashierShiftService.requireOpenShiftForCurrentUser() : null;
         Booking booking = Booking.builder()
                 .user(bookingOwner)
                 .showtime(showtime)
                 .bookingChannel(counterBooking ? BookingChannel.COUNTER : BookingChannel.ONLINE)
                 .soldBy(counterBooking ? operator : null)
+                .cashierShift(cashierShift)
                 .counterCustomerType(counterBooking
                         ? hasMemberCustomer(request) ? CounterCustomerType.ACCOUNT : CounterCustomerType.GUEST
                         : null)

@@ -44,7 +44,7 @@ public class BookingController {
     }
 
     @PostMapping("/tickets/{token}/scan")
-    @PreAuthorize("hasAnyAuthority('STAFF', 'ADMIN')")
+    @PreAuthorize("hasAuthority('BOOKING_MANAGE')")
     public ApiResponse<Void> markTicketAsScanned(@PathVariable String token) {
         ticketVerificationService.markAsScanned(token);
         return ApiResponse.<Void>builder()

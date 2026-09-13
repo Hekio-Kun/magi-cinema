@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.ShowtimeStatus;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PaymentMethod;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpecificationExecutor<Booking> {
@@ -103,4 +104,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     List<Object[]> aggregateSuccessfulTicketSales(
             @Param("fromTime") LocalDateTime fromTime,
             @Param("toTime") LocalDateTime toTime);
+
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b WHERE b.cashierShift.cashierShiftId = :shiftId AND b.status = org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingStatus.SUCCESS AND b.paymentMethod = :method")
+    Long sumSuccessfulAmountByShiftAndPaymentMethod(@Param("shiftId") Long shiftId, @Param("method") PaymentMethod method);
+
+    @Query("SELECT COALESCE(SUM(COALESCE(b.ticketSubtotal, b.totalAmount, 0)), 0) FROM Booking b WHERE b.cashierShift.cashierShiftId = :shiftId AND b.status = org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingStatus.SUCCESS")
+    Long sumSuccessfulTicketRevenueByShift(@Param("shiftId") Long shiftId);
+
+    @Query("SELECT COALESCE(SUM(COALESCE(b.concessionSubtotal, 0)), 0) FROM Booking b WHERE b.cashierShift.cashierShiftId = :shiftId AND b.status = org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingStatus.SUCCESS")
+    Long sumSuccessfulConcessionRevenueByShift(@Param("shiftId") Long shiftId);
 }

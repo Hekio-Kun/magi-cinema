@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 import { dashboardService, type DashboardResponse, type FinancialSummaryResponse } from "@/api/dashboardApi";
+import { staffPerformanceApi, type StaffPerformanceResponse } from "@/api/staffPerformanceApi";
 import { KPICards } from "./KPICards";
 
 const MONEY = new Intl.NumberFormat("vi-VN", {
@@ -89,10 +90,10 @@ function Panel({ title, caption, children }: { title: string; caption: string; c
 function FinancialCards({ summary }: { summary?: FinancialSummaryResponse | null }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 16 }}>
-      <MetricCard icon={<WalletCards size={17} />} label="Doanh thu ghi nhận" value={formatMoney(summary?.netSales)} caption={`${summary?.successfulBookings || 0} booking đã thanh toán`} color="#D97706" />
+      <MetricCard icon={<WalletCards size={17} />} label="Doanh thu ghi nhận" value={formatMoney(summary?.netSales)} caption={`${summary?.successfulBookings || 0} đơn đã thanh toán`} color="#D97706" />
       <MetricCard icon={<CheckCircle2 size={17} />} label="Tiền đã thu" value={formatMoney(summary?.netSales)} caption="Theo booking SUCCESS và phương thức thanh toán" color="#16A34A" />
       <MetricCard icon={<CalendarClock size={17} />} label="Đang chờ thanh toán" value={formatMoney(summary?.pendingAmount)} caption={`${summary?.pendingBookings || 0} booking PENDING, chưa tính vào doanh thu`} color="#2563EB" />
-      <MetricCard icon={<Percent size={17} />} label="Đã hủy" value={formatMoney(summary?.cancelledAmount)} caption={`${summary?.cancelledBookings || 0} booking; hệ thống không hoàn tiền`} color="#DC2626" />
+      <MetricCard icon={<Percent size={17} />} label="Đã hủy" value={formatMoney(summary?.cancelledAmount)} caption={`${summary?.cancelledBookings || 0} đơn; không tự động hoàn tiền`} color="#DC2626" />
     </div>
   );
 }
@@ -104,7 +105,7 @@ function DailyRevenueChart({ summary }: { summary?: FinancialSummaryResponse | n
   }));
 
   return (
-    <Panel title="Dòng tiền theo ngày" caption="Doanh thu vé và đồ ăn/combo của booking đã thanh toán">
+    <Panel title="Dòng tiền theo ngày" caption="Doanh thu vé và bắp nước của các đơn đã thanh toán">
       {data.length === 0 ? <EmptyState>Chưa có dữ liệu trong khoảng thời gian này.</EmptyState> : (
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -141,7 +142,7 @@ function PaymentBreakdown({ summary }: { summary?: FinancialSummaryResponse | nu
                 <div style={{ marginTop: 7, height: 8, borderRadius: 999, background: "#F1F5F9", overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(100, percentage)}%`, background: "#4F46E5", borderRadius: 999 }} />
                 </div>
-                <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>{row.bookings} booking · {percentage.toFixed(1)}%</div>
+                <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>{row.bookings} đơn · {percentage.toFixed(1)}%</div>
               </div>
             );
           })}
@@ -194,11 +195,18 @@ function OccupancyTable({ summary }: { summary?: FinancialSummaryResponse | null
   );
 }
 
+function StaffPerformanceTable({ rows }: { rows: StaffPerformanceResponse[] }) {
+  return <Panel title="Hiệu suất nhân viên" caption="Doanh thu quầy, ca đã duyệt và tình trạng chấm công trong kỳ">
+    {rows.length === 0 ? <EmptyState>Chưa có dữ liệu nhân viên trong kỳ.</EmptyState> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}><thead><tr style={{ color: "#64748B", textAlign: "left" }}><th style={{ padding: "0 8px 10px 0" }}>Nhân viên</th><th style={{ padding: "0 8px 10px" }}>Ca duyệt</th><th style={{ padding: "0 8px 10px", textAlign: "right" }}>Vé</th><th style={{ padding: "0 8px 10px", textAlign: "right" }}>Bắp nước</th><th style={{ padding: "0 8px 10px", textAlign: "right" }}>Tổng doanh thu</th><th style={{ padding: "0 0 10px 8px", textAlign: "right" }}>Đi trễ / vắng</th></tr></thead><tbody>{rows.map((row) => <tr key={row.staffUserId} style={{ borderTop: "1px solid #F1F5F9" }}><td style={{ padding: "11px 8px 11px 0" }}><div style={{ color: "#111827", fontWeight: 750 }}>{row.fullName}</div><div style={{ color: "#94A3B8" }}>@{row.username}</div></td><td style={{ padding: "11px 8px", color: "#475569" }}>{row.approvedShiftCount}/{row.shiftCount}</td><td style={{ padding: "11px 8px", textAlign: "right", color: "#475569" }}>{formatMoney(row.ticketSales)}</td><td style={{ padding: "11px 8px", textAlign: "right", color: "#475569" }}>{formatMoney(row.concessionSales)}</td><td style={{ padding: "11px 8px", textAlign: "right", color: "#111827", fontWeight: 800 }}>{formatMoney(row.totalSales)}</td><td style={{ padding: "11px 0 11px 8px", textAlign: "right", color: row.lateCount || row.absentCount ? "#B45309" : "#16A34A" }}>{row.lateCount} / {row.absentCount}</td></tr>)}</tbody></table></div>}
+  </Panel>;
+}
+
 export function ReportsPage() {
   const today = useMemo(() => new Date(), []);
   const [fromDate, setFromDate] = useState(localIsoDate(addDays(today, -6)));
   const [toDate, setToDate] = useState(localIsoDate(today));
   const [stats, setStats] = useState<DashboardResponse | null>(null);
+  const [staffPerformance, setStaffPerformance] = useState<StaffPerformanceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const initialLoad = useRef(false);
@@ -207,7 +215,12 @@ export function ReportsPage() {
     setLoading(true);
     setError("");
     try {
-      setStats(await dashboardService.getStats(fromDate, toDate));
+      const [dashboardStats, performance] = await Promise.all([
+        dashboardService.getStats(fromDate, toDate),
+        staffPerformanceApi.list(fromDate, toDate).catch(() => []),
+      ]);
+      setStats(dashboardStats);
+      setStaffPerformance(performance);
     } catch (err) {
       console.error("Failed to fetch dashboard stats:", err);
       setError("Không thể tải số liệu. Kiểm tra kết nối backend và quyền quản trị.");
@@ -252,6 +265,7 @@ export function ReportsPage() {
       <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 20, marginBottom: 20 }}><TopMoviesTable summary={summary} /><OccupancyTable summary={summary} /></section>
 
       <section style={{ marginBottom: 20 }}><KPICards stats={stats} /></section>
+      <section style={{ marginBottom: 20 }}><StaffPerformanceTable rows={staffPerformance} /></section>
       <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16 }}>
         <MetricCard icon={<Film size={17} />} label="Phim trong hệ thống" value={(stats?.totalMovies || 0).toLocaleString("vi-VN")} caption="Nguồn dữ liệu quản lý phim" color="#2563EB" />
         <MetricCard icon={<CalendarClock size={17} />} label="Suất chiếu" value={(stats?.totalShowtimes || 0).toLocaleString("vi-VN")} caption="Tổng lịch chiếu đã tạo" color="#D97706" />

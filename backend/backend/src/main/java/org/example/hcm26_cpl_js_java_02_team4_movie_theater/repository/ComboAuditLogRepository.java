@@ -42,4 +42,17 @@ public interface ComboAuditLogRepository extends JpaRepository<ComboAuditLog, Lo
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT log FROM ComboAuditLog log
+            WHERE log.targetType LIKE 'STAFF_%'
+              AND (
+                    :keyword IS NULL
+                    OR LOWER(COALESCE(log.targetName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(COALESCE(log.summary, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(COALESCE(log.actorUsername, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            ORDER BY log.createdAt DESC, log.auditLogId DESC
+            """)
+    List<ComboAuditLog> searchStaff(@Param("keyword") String keyword, Pageable pageable);
 }

@@ -39,6 +39,18 @@ const BookingManagementPage = lazy(() =>
 const StaffTicketSalesPage = lazy(() =>
   import("@/components/dashboard/StaffTicketSalesPage").then((module) => ({ default: module.StaffTicketSalesPage }))
 );
+const ConcessionSalesPage = lazy(() =>
+  import("@/components/dashboard/ConcessionSalesPage").then((module) => ({ default: module.ConcessionSalesPage }))
+);
+const CashierShiftPage = lazy(() =>
+  import("@/components/dashboard/CashierShiftPage").then((module) => ({ default: module.CashierShiftPage }))
+);
+const StaffSchedulePage = lazy(() =>
+  import("@/components/dashboard/StaffSchedulePage").then((module) => ({ default: module.StaffSchedulePage }))
+);
+const StaffAuditLogPage = lazy(() =>
+  import("@/components/dashboard/StaffAuditLogPage").then((module) => ({ default: module.StaffAuditLogPage }))
+);
 const ComboManagementPage = lazy(() =>
   import("@/components/dashboard/ComboManagementPage").then((module) => ({ default: module.ComboManagementPage }))
 );
@@ -151,6 +163,14 @@ export function AdminDashboard() {
         return <TicketPricingManagementPage />;
       case "Bán vé tại quầy":
         return <StaffTicketSalesPage />;
+      case "Bán bắp nước tại quầy":
+        return <ConcessionSalesPage />;
+      case "Ca thu ngân & đối soát":
+        return <CashierShiftPage />;
+      case "Lịch ca & chấm công":
+        return <StaffSchedulePage />;
+      case "Nhật ký nhân viên":
+        return <StaffAuditLogPage />;
       case "Đặt vé online":
         return <BookingManagementPage key="online-bookings" channel="ONLINE" />;
       case "Đặt vé tại quầy":

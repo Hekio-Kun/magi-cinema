@@ -15,13 +15,16 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.StringJoiner;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JwtService {
+
+    public static final String ISSUER = "movie-theater.com";
 
     JwtEncoder jwtEncoder;
 
@@ -35,13 +38,20 @@ public class JwtService {
         Instant now = Instant.now();
         Instant expiry = now.plus(validityDuration, ChronoUnit.HOURS);
 
-        // Build scope string from roles and permissions
-        StringJoiner scope = new StringJoiner(" ");
+        // Build a stable, de-duplicated scope string from the user's current roles.
+        Set<String> authorities = new LinkedHashSet<>();
         if (user.getRoles() != null) {
             user.getRoles().forEach(role -> {
-                scope.add("ROLE_" + role.getRoleName());
+                if (role == null || role.getRoleName() == null || role.getRoleName().isBlank()) {
+                    return;
+                }
+                authorities.add("ROLE_" + role.getRoleName().trim().toUpperCase(java.util.Locale.ROOT));
                 if (role.getPermissions() != null) {
-                    role.getPermissions().forEach(permission -> scope.add(permission.getName()));
+                    role.getPermissions().forEach(permission -> {
+                        if (permission != null && permission.getName() != null && !permission.getName().isBlank()) {
+                            authorities.add(permission.getName().trim().toUpperCase(java.util.Locale.ROOT));
+                        }
+                    });
                 }
             });
         }
@@ -49,10 +59,10 @@ public class JwtService {
         JwtClaimsSet jwtClaimsSet = JwtClaimsSet.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(user.getUsername())
-                .issuer("movie-theater.com")
+                .issuer(ISSUER)
                 .issuedAt(now)
                 .expiresAt(expiry)
-                .claim("scope", scope.toString())
+                .claim("scope", String.join(" ", authorities))
                 .build();
 
         return jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, jwtClaimsSet)).getTokenValue();

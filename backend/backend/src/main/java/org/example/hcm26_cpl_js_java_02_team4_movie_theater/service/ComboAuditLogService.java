@@ -78,6 +78,15 @@ public class ComboAuditLogService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyAuthority('USER_VIEW', 'SCHEDULE_MANAGE')")
+    public List<ComboAuditLogResponse> getStaffAuditLogs(String keyword, int limit) {
+        int safeLimit = Math.max(10, Math.min(limit, 200));
+        String normalizedKeyword = normalizeFilter(keyword);
+        return auditLogRepository.searchStaff(normalizedKeyword, PageRequest.of(0, safeLimit))
+                .stream().map(this::toResponse).toList();
+    }
+
     private Actor resolveActor() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {

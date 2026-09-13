@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.BaseErrorCode;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.ErrorCode;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.JwtService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,11 +33,11 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
@@ -64,6 +65,7 @@ public class SecurityConfig {
     ObjectMapper objectMapper;
     Environment environment;
     TokenBlacklistService tokenBlacklistService;
+    AccountTokenValidator accountTokenValidator;
 
     @NonFinal
     @Value("${jwt.signerKey:}")
@@ -88,6 +90,7 @@ public class SecurityConfig {
                     return config;
                 }))
                 .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(request -> request
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Public endpoints (no auth required)
@@ -111,14 +114,14 @@ public class SecurityConfig {
                                 "/auth/register/check",
                                 "/health",
                                 "/memberships/plans",
+                                "/memberships/tiers",
                                 "/bookings/tickets/**",
                                 "/payment/zalopay/return",
                                 "/payment/momo/return",
                                 "/ws/**").permitAll()
 
                         // Admin dashboard and operational read-only views
-                        .requestMatchers(
-                                "/contact/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_STAFF")
+                        .requestMatchers("/contact/admin/**").hasAuthority("CONTACT_MANAGE")
                         .requestMatchers(HttpMethod.GET,
                                 "/dashboard/stats",
                                 "/dashboard/notifications").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
@@ -130,6 +133,39 @@ public class SecurityConfig {
                                 "/combo-audit-logs",
                                 "/combo-audit-logs/**").hasAuthority("COMBO_MANAGE")
                         .requestMatchers(HttpMethod.GET,
+                                "/concession-orders",
+                                "/concession-orders/**").hasAuthority("BOOKING_VIEW")
+                        .requestMatchers(HttpMethod.POST,
+                                "/concession-orders",
+                                "/concession-orders/*/cancel").hasAuthority("BOOKING_MANAGE")
+                        .requestMatchers(HttpMethod.GET,
+                                "/cashier-shifts",
+                                "/cashier-shifts/**").hasAuthority("BOOKING_VIEW")
+                        .requestMatchers(HttpMethod.GET,
+                                "/staff-audit-logs",
+                                "/staff-audit-logs/**").hasAnyAuthority("USER_VIEW", "SCHEDULE_MANAGE")
+                        .requestMatchers(HttpMethod.GET,
+                                "/staff-performance",
+                                "/staff-performance/**").hasAnyAuthority("SCHEDULE_MANAGE", "USER_VIEW")
+                        .requestMatchers(HttpMethod.POST,
+                                "/cashier-shifts/open",
+                                "/cashier-shifts/*/close").hasAuthority("BOOKING_MANAGE")
+                        .requestMatchers(HttpMethod.POST,
+                                "/cashier-shifts/*/approve").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/staff-schedules",
+                                "/staff-schedules/**").hasAnyAuthority("SCHEDULE_MANAGE", "BOOKING_MANAGE", "USER_VIEW")
+                        .requestMatchers(HttpMethod.POST,
+                                "/staff-schedules/*/check-in",
+                                "/staff-schedules/*/check-out").hasAnyAuthority("SCHEDULE_MANAGE", "BOOKING_MANAGE")
+                        .requestMatchers(HttpMethod.POST,
+                                "/staff-schedules",
+                                "/staff-schedules/*/attendance").hasAuthority("SCHEDULE_MANAGE")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/staff-schedules/**").hasAuthority("SCHEDULE_MANAGE")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/staff-schedules/**").hasAuthority("SCHEDULE_MANAGE")
+                        .requestMatchers(HttpMethod.GET,
                                 "/promotions/admin",
                                 "/promotions/admin/**").hasAuthority("PROMOTION_MANAGE")
                         .requestMatchers(HttpMethod.GET,
@@ -140,6 +176,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/cinema-rooms",
                                 "/cinema-rooms/**").hasAnyAuthority("SHOWTIME_MANAGE", "BOOKING_VIEW")
+                        .requestMatchers(HttpMethod.GET,
+                                "/roles",
+                                "/permissions").hasAuthority("ROLE_MANAGE")
 
                         // Seat maps and pricing config for a showtime are public read data used by booking pages.
                         .requestMatchers(HttpMethod.GET,
@@ -150,7 +189,7 @@ public class SecurityConfig {
                         // Room seat definitions are used inside the admin workspace.
                         .requestMatchers(HttpMethod.GET,
                                 "/seats",
-                                "/seats/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_STAFF", "ROLE_CUSTOMER")
+                                "/seats/**").hasAnyAuthority("SHOWTIME_MANAGE", "BOOKING_VIEW", "ROLE_CUSTOMER")
 
                         // Management writes
                         .requestMatchers(HttpMethod.GET,
@@ -173,6 +212,11 @@ public class SecurityConfig {
                                 "/cinema-rooms",
                                 "/seats",
                                 "/showtime-seats").hasAuthority("SHOWTIME_MANAGE")
+                        .requestMatchers(HttpMethod.POST,
+                                "/roles",
+                                "/permissions").hasAuthority("ROLE_MANAGE")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/roles/**").hasAuthority("ROLE_MANAGE")
 
                         // Guest/customer public browsing
                         .requestMatchers(HttpMethod.GET,
@@ -220,6 +264,9 @@ public class SecurityConfig {
                                 "/cinema-rooms/**",
                                 "/seats/**",
                                 "/showtime-seats/**").hasAuthority("SHOWTIME_MANAGE")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/roles/**",
+                                "/permissions/**").hasAuthority("ROLE_MANAGE")
                         // Authenticated endpoints
                         .anyRequest().authenticated()
                 )
@@ -250,9 +297,12 @@ public class SecurityConfig {
                 .macAlgorithm(MacAlgorithm.HS512)
                 .build();
 
-        OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefault();
+        OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(JwtService.ISSUER);
         OAuth2TokenValidator<Jwt> blacklistValidator = new TokenBlacklistValidator(tokenBlacklistService);
-        jwtDecoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(defaultValidator, blacklistValidator));
+        jwtDecoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                defaultValidator,
+                blacklistValidator,
+                accountTokenValidator));
 
         return jwtDecoder;
     }

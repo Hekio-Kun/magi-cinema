@@ -29,7 +29,8 @@ VALUES
     ('PROMOTION_MANAGE','Manage promotions and promotion usage'),
     ('CONTACT_MANAGE',  'Manage customer contacts and feedback'),
     ('BOOKING_VIEW',    'View booking history and reports'),
-    ('BOOKING_MANAGE',  'Manage bookings and ticket cancellations')
+    ('BOOKING_MANAGE',  'Manage bookings and ticket cancellations'),
+    ('SCHEDULE_MANAGE', 'Create staff schedules and manage attendance')
 ON CONFLICT (name) DO NOTHING;
 
 -- ==========================================
@@ -60,10 +61,12 @@ VALUES
     ('MANAGER', 'PROMOTION_MANAGE'),
     ('MANAGER', 'CONTACT_MANAGE'),
     ('MANAGER', 'BOOKING_VIEW'),
+    ('MANAGER', 'SCHEDULE_MANAGE'),
     ('STAFF',   'MOVIE_VIEW'),
     ('STAFF',   'BOOKING_VIEW'),
     ('STAFF',   'BOOKING_MANAGE'),
-    ('CUSTOMER','MOVIE_VIEW')
+    ('CUSTOMER','MOVIE_VIEW'),
+    ('ADMIN',   'SCHEDULE_MANAGE')
 ON CONFLICT DO NOTHING;
 
 -- ==========================================

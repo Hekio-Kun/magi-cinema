@@ -51,11 +51,14 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHeaderProps) {
   const { username, roles, scopes } = useCurrentUser();
+  const canReadNotifications = canAccessDashboardPage("Tổng quan", normalizeRoles(username ? roles : []), username ? scopes : []);
   const [showNotifs, setShowNotifs] = useState(false);
   const [search, setSearch] = useState("");
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
+  const shownNotifications = canReadNotifications ? notifications : [];
+  const shownUnreadCount = canReadNotifications ? unreadCount : 0;
 
   const accessiblePages = Object.keys(DASHBOARD_PAGE_ACCESS).filter((page) =>
     canAccessDashboardPage(page, normalizeRoles(username ? roles : []), username ? scopes : [])
@@ -64,6 +67,10 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
   const searchResults = search.trim() ? accessiblePages.filter(p => p.toLowerCase().includes(search.toLowerCase())) : [];
 
   useEffect(() => {
+    if (!canReadNotifications) {
+      return undefined;
+    }
+
     let active = true;
     const fetchNotifications = () => {
       notificationService.getDashboardNotifications(10)
@@ -85,9 +92,10 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
       active = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [canReadNotifications]);
 
   const handleMarkAllAsRead = async () => {
+    if (!canReadNotifications) return;
     try {
       await notificationService.markAllAsRead();
       setUnreadCount(0);
@@ -242,7 +250,7 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
             }}
           >
             <Bell size={18} color={showNotifs ? GOLD : "#64748B"} />
-            {unreadCount > 0 && (
+            {shownUnreadCount > 0 && (
               <span
                 style={{
                   position: "absolute",
@@ -261,7 +269,7 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
                   fontWeight: 800,
                 }}
               >
-                {unreadCount}
+                {shownUnreadCount}
               </span>
             )}
           </button>
@@ -286,11 +294,11 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
                 <button type="button" onClick={handleMarkAllAsRead} style={{ border: "none", background: "transparent", fontSize: 11, color: GOLD, fontWeight: 600, cursor: "pointer" }}>Đánh dấu đã đọc</button>
               </div>
               <div style={{ maxHeight: 300, overflowY: "auto" }}>
-                {notifications.length === 0 ? (
+                {shownNotifications.length === 0 ? (
                   <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748B", fontSize: 12, fontWeight: 600 }}>
                     Chưa có thông báo mới
                   </div>
-                ) : notifications.map(n => {
+                ) : shownNotifications.map(n => {
                   const itemStyle = getNotificationStyle(n.type);
                   const Icon = itemStyle.icon;
                   return (

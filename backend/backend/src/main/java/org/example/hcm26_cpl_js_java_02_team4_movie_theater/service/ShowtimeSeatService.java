@@ -88,7 +88,7 @@ public class ShowtimeSeatService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public ShowtimeSeatResponse createShowtimeSeat(ShowtimeSeatCreationRequest request) {
         Showtime showtime = getShowtime(request.getShowtimeId());
         Seat seat = getSeat(request.getSeatId());
@@ -110,7 +110,7 @@ public class ShowtimeSeatService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public ShowtimeSeatResponse updateShowtimeSeat(Long showtimeSeatId, ShowtimeSeatUpdateRequest request) {
         ShowtimeSeat showtimeSeat = getShowtimeSeat(showtimeSeatId);
         Showtime showtime = getShowtime(request.getShowtimeId());
@@ -140,7 +140,7 @@ public class ShowtimeSeatService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
     public void deleteShowtimeSeat(Long showtimeSeatId) {
         showtimeSeatRepository.delete(getShowtimeSeat(showtimeSeatId));
     }

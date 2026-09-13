@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -115,6 +116,17 @@ public class DashboardService {
                 WHERE created_at >= ? AND created_at < ?
                 """, fromTime, toTime);
 
+        Map<String, Object> concessionTotals = jdbcTemplate.queryForMap("""
+                SELECT COUNT(*) AS total_orders,
+                       COUNT(*) FILTER (WHERE status = 'PAID') AS successful_orders,
+                       COUNT(*) FILTER (WHERE status = 'CANCELLED') AS cancelled_orders,
+                       COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS net_sales,
+                       COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) AS concession_revenue,
+                       COALESCE(SUM(CASE WHEN status = 'CANCELLED' THEN total_amount ELSE 0 END), 0) AS cancelled_amount
+                FROM concession_order
+                WHERE created_at >= ? AND created_at < ?
+                """, fromTime, toTime);
+
         Map<String, Object> seatTotals = jdbcTemplate.queryForMap("""
                 SELECT COUNT(ss.showtime_seat_id) AS seat_capacity,
                        COUNT(*) FILTER (WHERE ss.status = 'BOOKED') AS booked_seats
@@ -165,19 +177,51 @@ public class DashboardService {
                 .concessionRevenue(rs.getLong("concession_revenue"))
                 .build(), range.fromDate(), range.toDate());
 
+        List<FinancialDailyResponse> concessionDaily = jdbcTemplate.query("""
+                SELECT created_at::date AS report_date,
+                       COUNT(*) AS bookings,
+                       COALESCE(SUM(total_amount), 0) AS net_sales
+                FROM concession_order
+                WHERE status = 'PAID' AND created_at >= ? AND created_at < ?
+                GROUP BY created_at::date
+                """, (rs, rowNum) -> FinancialDailyResponse.builder()
+                .date(rs.getObject("report_date", LocalDate.class))
+                .bookings(rs.getLong("bookings"))
+                .grossSales(rs.getLong("net_sales"))
+                .netSales(rs.getLong("net_sales"))
+                .concessionRevenue(rs.getLong("net_sales"))
+                .build(), fromTime, toTime);
+        Map<LocalDate, FinancialDailyResponse> mergedDaily = new LinkedHashMap<>();
+        daily.forEach(item -> mergedDaily.put(item.getDate(), item));
+        concessionDaily.forEach(item -> {
+            FinancialDailyResponse target = mergedDaily.computeIfAbsent(item.getDate(), date -> FinancialDailyResponse.builder().date(date).build());
+            target.setBookings(target.getBookings() + item.getBookings());
+            target.setGrossSales(target.getGrossSales() + item.getGrossSales());
+            target.setNetSales(target.getNetSales() + item.getNetSales());
+            target.setConcessionRevenue(target.getConcessionRevenue() + item.getConcessionRevenue());
+        });
+        daily = mergedDaily.values().stream().toList();
+
         List<FinancialPaymentMethodResponse> paymentMethods = jdbcTemplate.query("""
                 SELECT COALESCE(payment_method, 'UNKNOWN') AS payment_method,
                        COUNT(*) AS bookings,
                        COALESCE(SUM(total_amount), 0) AS amount
-                FROM booking
-                WHERE status = 'SUCCESS' AND created_at >= ? AND created_at < ?
+                FROM (
+                    SELECT payment_method, total_amount
+                    FROM booking
+                    WHERE status = 'SUCCESS' AND created_at >= ? AND created_at < ?
+                    UNION ALL
+                    SELECT payment_method, total_amount
+                    FROM concession_order
+                    WHERE status = 'PAID' AND created_at >= ? AND created_at < ?
+                ) sales
                 GROUP BY COALESCE(payment_method, 'UNKNOWN')
                 ORDER BY amount DESC
                 """, (rs, rowNum) -> FinancialPaymentMethodResponse.builder()
                 .paymentMethod(rs.getString("payment_method"))
                 .bookings(rs.getLong("bookings"))
                 .amount(rs.getLong("amount"))
-                .build(), fromTime, toTime);
+                .build(), fromTime, toTime, fromTime, toTime);
 
         List<FinancialMovieResponse> topMovies = jdbcTemplate.query("""
                 SELECT movie_id, movie_name, COUNT(*) AS bookings,
@@ -228,8 +272,9 @@ public class DashboardService {
                             .build();
                 }, range.fromDate(), range.toDate());
 
-        long netSales = number(totals, "net_sales");
-        long successfulBookings = number(totals, "successful_bookings");
+        long concessionNetSales = number(concessionTotals, "net_sales");
+        long netSales = number(totals, "net_sales") + concessionNetSales;
+        long successfulBookings = number(totals, "successful_bookings") + number(concessionTotals, "successful_orders");
         long bookedSeats = number(seatTotals, "booked_seats");
         long seatCapacity = number(seatTotals, "seat_capacity");
 
@@ -245,20 +290,20 @@ public class DashboardService {
         return FinancialSummaryResponse.builder()
                 .fromDate(range.fromDate())
                 .toDate(range.toDate())
-                .totalBookings(number(totals, "total_bookings"))
+                .totalBookings(number(totals, "total_bookings") + number(concessionTotals, "total_orders"))
                 .successfulBookings(successfulBookings)
-                .cancelledBookings(number(totals, "cancelled_bookings"))
+                .cancelledBookings(number(totals, "cancelled_bookings") + number(concessionTotals, "cancelled_orders"))
                 .pendingBookings(number(totals, "pending_bookings"))
                 .ticketsSold(daily.stream().mapToLong(FinancialDailyResponse::getTickets).sum())
                 .seatCapacity(seatCapacity)
                 .bookedSeats(bookedSeats)
                 .occupancyRate(seatCapacity == 0 ? 0d : (bookedSeats * 100d) / seatCapacity)
-                .grossSales(number(totals, "gross_sales"))
+                .grossSales(number(totals, "gross_sales") + concessionNetSales)
                 .discountAmount(number(totals, "discount_amount"))
                 .netSales(netSales)
                 .ticketRevenue(number(totals, "ticket_revenue"))
-                .concessionRevenue(number(totals, "concession_revenue"))
-                .cancelledAmount(number(totals, "cancelled_amount"))
+                .concessionRevenue(number(totals, "concession_revenue") + number(concessionTotals, "concession_revenue"))
+                .cancelledAmount(number(totals, "cancelled_amount") + number(concessionTotals, "cancelled_amount"))
                 .pendingAmount(number(totals, "pending_amount"))
                 .averageOrderValue(successfulBookings == 0 ? 0 : netSales / successfulBookings)
                 .cashCollected(cashCollected)

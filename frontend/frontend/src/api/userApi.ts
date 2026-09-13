@@ -147,6 +147,11 @@ export const userService = {
         return unwrap<UserDetailResponse[]>(res);
     },
 
+    getStaffUsers: async (): Promise<UserDetailResponse[]> => {
+        const res = await apiClient.get('/users/staff');
+        return unwrap<UserDetailResponse[]>(res);
+    },
+
     // Roles and Permissions
     getAllRoles: async (): Promise<RoleResponse[]> => {
         const res = await apiClient.get('/roles');
@@ -160,6 +165,11 @@ export const userService = {
 
     createRole: async (data: RoleRequest): Promise<RoleResponse> => {
         const res = await apiClient.post('/roles', data);
+        return unwrap<RoleResponse>(res);
+    },
+
+    updateRole: async (roleName: string, data: RoleRequest): Promise<RoleResponse> => {
+        const res = await apiClient.put(`/roles/${encodeURIComponent(roleName)}`, data);
         return unwrap<RoleResponse>(res);
     },
 

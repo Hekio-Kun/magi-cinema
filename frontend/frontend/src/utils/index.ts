@@ -16,5 +16,7 @@ export function isTokenExpired(token: string): boolean {
 export function getTokenRoles(token: string): string[] {
     const payload = decodeJwtPayload(token);
     const scope = payload.scope as string | undefined;
-    return scope ? scope.split(' ') : [];
+    return scope
+        ? scope.split(/\s+/).map((value) => value.trim()).filter(Boolean)
+        : [];
 }

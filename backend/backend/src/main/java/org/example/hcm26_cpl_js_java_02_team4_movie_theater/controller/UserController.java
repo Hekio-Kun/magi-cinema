@@ -40,6 +40,12 @@ public class UserController {
                 .build();
     }
 
+    @GetMapping("/staff")
+    @PreAuthorize("hasAnyAuthority('USER_VIEW', 'SCHEDULE_MANAGE')")
+    public ApiResponse<List<UserDetailResponse>> getStaffUsers() {
+        return ApiResponse.<List<UserDetailResponse>>builder().result(userService.getStaffUsers()).build();
+    }
+
     @GetMapping("/me")
     public ApiResponse<UserDetailResponse> getMyProfile() {
         return ApiResponse.<UserDetailResponse>builder()

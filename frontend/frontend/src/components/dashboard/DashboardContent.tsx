@@ -125,7 +125,7 @@ export function DashboardContent() {
           icon={<CheckCircle2 size={17} />}
           title="Doanh thu 7 ngày"
           value={formatMoney(stats?.financialSummary?.netSales)}
-          caption={`${stats?.financialSummary?.successfulBookings || 0} booking thành công · tiền đã thu theo booking SUCCESS`}
+          caption={`${stats?.financialSummary?.successfulBookings || 0} đơn thành công · tiền đã thu`}
           color="#16A34A"
         />
       </section>
