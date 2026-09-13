@@ -126,6 +126,20 @@ npm run dev
 
 Trước khi push, chạy `npm run check` (lint, TypeScript, production build). Hướng dẫn chi tiết ở [frontend/README.md](frontend/README.md).
 
+### Kiểm thử bot hybrid
+
+Bộ QA kết hợp Playwright và k6 nằm trong thư mục `qa/`. Playwright kiểm tra luồng giao diện, WebSocket, tranh chấp ghế và RBAC; k6 mô phỏng tải API theo các kịch bản `browse`, `seat-contention` và `authz`.
+
+```powershell
+cd qa
+npm install
+npx playwright install chromium
+npm run test:ui
+npm run test:hybrid
+```
+
+Mặc định bộ test chỉ cho phép API local để tránh ghi nhầm dữ liệu online. Xem [qa/README.md](qa/README.md) để cấu hình tài khoản demo, tải API và môi trường kiểm thử riêng.
+
 ---
 
 ## 👥 Phân hệ người dùng

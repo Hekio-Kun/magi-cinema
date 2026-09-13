@@ -80,7 +80,7 @@ function seatContention(token) {
   const showtimeId = json(showtimes, 'result.0.showtimes.0.showtimeId', null);
   if (!showtimeId) return;
   const seats = http.get(`${BASE_URL}/showtime-seats?showtimeId=${showtimeId}&page=0&size=500`, { tags: { operation: 'seat-map' } });
-  const available = (json(seats, 'result.content', []) || []).filter((seat) => seat.status === 'AVAILABLE' && seat.seatType !== 'DISABLED');
+  const available = (json(seats, 'result.content', []) || []).filter((seat) => seat.status === 'AVAILABLE' && seat.seatType !== 'DISABLED' && seat.seatType !== 'COUPLE');
   if (!available.length) return;
   // All VUs intentionally target the same first available seat to exercise row locking.
   const seatId = available[0].showtimeSeatId;

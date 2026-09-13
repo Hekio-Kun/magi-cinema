@@ -4,7 +4,7 @@ Bộ này kết hợp kiểm thử trình duyệt bằng Playwright và kiểm t
 
 ## Phạm vi
 
-- `functional.spec.ts`: đăng nhập, duyệt suất chiếu, mở sơ đồ ghế và đọc lịch sử đặt vé.
+- `functional.spec.ts`: đăng nhập, duyệt suất chiếu, mở sơ đồ ghế, tạo/hủy booking `PENDING` bằng gateway giả lập và đọc lịch sử đặt vé.
 - `seat-contention.spec.ts`: hai khách cùng giữ một ghế, kiểm tra chỉ một phiên thắng; đồng thời mở WebSocket và xác nhận nhận được `SEAT_STATUS_CHANGED`.
 - `rbac.spec.ts`: khách hàng bị từ chối các endpoint quản trị, tài khoản quản lý được phép đọc booking và thống kê.
 - `k6/load.js`: các kịch bản `browse`, `seat-contention`, `authz` để kiểm tra tải, giữ ghế và phân quyền.

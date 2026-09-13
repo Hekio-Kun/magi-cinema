@@ -91,6 +91,7 @@ export async function findBookableShowtime(request: APIRequestContext): Promise<
   const datesBody = await expectJson<string[]>(datesResponse);
   const dates = datesBody.result || [];
   const now = Date.now();
+  const latestBookableStart = now + 7 * 24 * 60 * 60 * 1000;
 
   for (const date of dates) {
     const response = await request.get(apiUrl(`/showtimes?date=${encodeURIComponent(date)}`));
@@ -99,7 +100,7 @@ export async function findBookableShowtime(request: APIRequestContext): Promise<
       for (const showtime of group.showtimes || []) {
         const startsAt = Date.parse(`${showtime.showDate}T${showtime.startTime}`);
         const isOpen = showtime.status !== 'CANCELLED' && showtime.status !== 'COMPLETED';
-        if (isOpen && Number.isFinite(startsAt) && startsAt > now) return showtime;
+        if (isOpen && Number.isFinite(startsAt) && startsAt > now && startsAt <= latestBookableStart) return showtime;
       }
     }
   }
@@ -110,7 +111,7 @@ export async function getAvailableSeatIds(request: APIRequestContext, showtimeId
   const response = await request.get(apiUrl(`/showtime-seats?showtimeId=${showtimeId}&page=0&size=500`));
   const body = await expectJson<SeatPage>(response);
   const seats = (body.result?.content || []).filter(
-    (seat) => seat.status === 'AVAILABLE' && seat.seatType !== 'DISABLED',
+    (seat) => seat.status === 'AVAILABLE' && seat.seatType !== 'DISABLED' && seat.seatType !== 'COUPLE',
   );
   if (seats.length < minimum) throw new Error(`Suất ${showtimeId} không còn đủ ghế trống cho test.`);
   return seats.slice(0, minimum).map((seat) => seat.showtimeSeatId);
@@ -132,6 +133,23 @@ export async function holdSeats(
 
 export async function releaseSeats(request: APIRequestContext, user: AuthenticatedUser, showtimeId: number) {
   return request.delete(apiUrl(`/seat-selections?showtimeId=${showtimeId}`), { headers: user.headers });
+}
+
+export async function createPendingBooking(
+  request: APIRequestContext,
+  user: AuthenticatedUser,
+  showtimeId: number,
+  showtimeSeatIds: number[],
+) {
+  const response = await request.post(apiUrl('/bookings'), {
+    headers: user.headers,
+    data: { showtimeId, showtimeSeatIds, paymentMethod: 'MOMO' },
+  });
+  return { response, body: response.ok() ? await response.json() as ApiEnvelope<{ bookingId?: number; status?: string }> : null };
+}
+
+export async function cancelPendingBooking(request: APIRequestContext, user: AuthenticatedUser, bookingId: number) {
+  return request.delete(apiUrl(`/bookings/${bookingId}/pending`), { headers: user.headers });
 }
 
 export function websocketUrl(showtimeId: number) {
