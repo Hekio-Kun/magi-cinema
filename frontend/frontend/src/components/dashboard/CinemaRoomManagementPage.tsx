@@ -1,685 +1,183 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { toast } from "react-toastify";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import {
-  Search, Plus, Edit, Loader2, X, MonitorPlay, ChevronLeft, ChevronRight, RefreshCw, Eye, Armchair, AlertTriangle, Ban, Rows3, Settings2, Wand2
+  AlertTriangle,
+  Armchair,
+  Ban,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  DoorOpen,
+  Edit,
+  Eye,
+  LayoutGrid,
+  Loader2,
+  MonitorPlay,
+  Plus,
+  RefreshCw,
+  Rows3,
+  Search,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Wand2,
+  X,
 } from "lucide-react";
-import {
-  cinemaRoomService,
-  type GetCinemaRoomsParams,
-} from "@/api/cinemaRoomApi";
+import { toast } from "react-toastify";
+import { cinemaRoomService, type GetCinemaRoomsParams } from "@/api/cinemaRoomApi";
 import { getApiErrorMessage } from "@/api/errors";
 import { seatService } from "@/api/seatApi";
-import { CinemaRoom, CinemaRoomCreationRequest, CinemaRoomOperationalSummary, CinemaRoomSeatSummary, CinemaRoomUpdateRequest, RoomStatus, RoomType, SeatLayoutRequest } from "@/types/cinemaRoom";
+import type {
+  CinemaRoom,
+  CinemaRoomOperationalSummary,
+  CinemaRoomSeatSummary,
+  CinemaRoomUpdateRequest,
+  RoomStatus,
+  RoomType,
+  SeatLayoutRequest,
+} from "@/types/cinemaRoom";
 import type { Seat, SeatStatus, SeatType, SeatUpdateRequest } from "@/types/seat";
-
-const FONT = "'Inter', sans-serif";
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  ACTIVE:   { label: "Hoạt động",   bg: "rgba(16,185,129,0.1)",  color: "#059669" },
-  INACTIVE: { label: "Vô hiệu", bg: "rgba(239,68,68,0.1)",   color: "#dc2626" },
-  MAINTENANCE: { label: "Bảo trì", bg: "rgba(245,158,11,0.12)", color: "#d97706" },
-};
-
-const ROOM_TYPE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  STANDARD: { label: "Standard", bg: "#dbeafe", color: "#1d4ed8" },
-  IMAX: { label: "IMAX", bg: "#ede9fe", color: "#6d28d9" },
-  "4DX": { label: "4DX", bg: "#dcfce7", color: "#15803d" },
-  BED: { label: "Bed", bg: "#fce7f3", color: "#be185d" },
-  VIP: { label: "VIP", bg: "#fee2e2", color: "#b91c1c" },
-};
-
-const ROOM_TYPES: RoomType[] = ['STANDARD', 'IMAX', '4DX'];
-const ROOM_STATUSES: RoomStatus[] = ['ACTIVE', 'INACTIVE', 'MAINTENANCE'];
-const SEAT_TYPES: SeatType[] = ['NORMAL', 'VIP', 'COUPLE', 'DISABLED'];
-const SEAT_STATUSES: SeatStatus[] = ['ACTIVE', 'INACTIVE', 'MAINTENANCE'];
-
-const SEAT_STATUS_CONFIG: Record<SeatStatus, { label: string; bg: string; color: string; border: string }> = {
-  ACTIVE: { label: "Hoạt động", bg: "#ecfdf5", color: "#047857", border: "#10b981" },
-  INACTIVE: { label: "Vô hiệu", bg: "#f1f5f9", color: "#64748b", border: "#cbd5e1" },
-  MAINTENANCE: { label: "Bảo trì", bg: "#fffbeb", color: "#b45309", border: "#f59e0b" },
-};
-
-const SEAT_TYPE_CONFIG: Record<SeatType, { label: string; color: string }> = {
-  NORMAL: { label: "Thường", color: "#2563eb" },
-  VIP: { label: "VIP", color: "#7c3aed" },
-  COUPLE: { label: "Đôi", color: "#db2777" },
-  DISABLED: { label: "Hỗ trợ", color: "#0f766e" },
-};
-
-type CinemaRoomFormState = CinemaRoomUpdateRequest;
-
-const EMPTY_FORM: CinemaRoomFormState = {
-  cinemaRoomName: "",
-  seatQuantity: 50,
-  seatsPerRow: 10,
-  type: "STANDARD",
-  status: "ACTIVE",
-};
 
 const PAGE_SIZE = 10;
 
-const INPUT_CLS =
-  "w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm " +
-  "focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500";
-const LABEL_CLS = "block text-xs font-semibold text-slate-500 mb-1 tracking-wide";
+const STATUS_CONFIG: Record<RoomStatus, { label: string; tone: string; soft: string; dot: string }> = {
+  ACTIVE: { label: "Đang hoạt động", tone: "text-emerald-700", soft: "bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
+  INACTIVE: { label: "Đã vô hiệu", tone: "text-slate-600", soft: "bg-slate-100 border-slate-200", dot: "bg-slate-400" },
+  MAINTENANCE: { label: "Đang bảo trì", tone: "text-amber-700", soft: "bg-amber-50 border-amber-200", dot: "bg-amber-500" },
+};
 
-// ── Main Component ────────────────────────────────────────────────────────────
+const ROOM_TYPE_CONFIG: Record<RoomType, { label: string; color: string; soft: string }> = {
+  STANDARD: { label: "Standard", color: "text-blue-700", soft: "bg-blue-50 border-blue-200" },
+  IMAX: { label: "IMAX", color: "text-violet-700", soft: "bg-violet-50 border-violet-200" },
+  "4DX": { label: "4DX", color: "text-emerald-700", soft: "bg-emerald-50 border-emerald-200" },
+  BED: { label: "Bed", color: "text-pink-700", soft: "bg-pink-50 border-pink-200" },
+  VIP: { label: "VIP", color: "text-rose-700", soft: "bg-rose-50 border-rose-200" },
+};
+
+const SEAT_TYPE_CONFIG: Record<SeatType, { label: string; color: string; background: string; border: string }> = {
+  NORMAL: { label: "Thường", color: "text-blue-700", background: "bg-blue-50", border: "border-blue-300" },
+  VIP: { label: "VIP", color: "text-violet-700", background: "bg-violet-50", border: "border-violet-300" },
+  COUPLE: { label: "Đôi", color: "text-pink-700", background: "bg-pink-50", border: "border-pink-300" },
+  DISABLED: { label: "Hỗ trợ", color: "text-cyan-700", background: "bg-cyan-50", border: "border-cyan-300" },
+};
+
+const SEAT_STATUS_CONFIG: Record<SeatStatus, { label: string; color: string; background: string; border: string }> = {
+  ACTIVE: { label: "Hoạt động", color: "text-emerald-700", background: "bg-emerald-50", border: "border-emerald-300" },
+  INACTIVE: { label: "Vô hiệu", color: "text-slate-500", background: "bg-slate-100", border: "border-slate-300" },
+  MAINTENANCE: { label: "Bảo trì", color: "text-amber-700", background: "bg-amber-50", border: "border-amber-300" },
+};
+
+const ROOM_TYPES: RoomType[] = ["STANDARD", "IMAX", "4DX", "BED", "VIP"];
+const ROOM_STATUSES: Array<RoomStatus | "ALL"> = ["ALL", "ACTIVE", "MAINTENANCE", "INACTIVE"];
+const SEAT_TYPES: SeatType[] = ["NORMAL", "VIP", "COUPLE", "DISABLED"];
+const SEAT_STATUSES: SeatStatus[] = ["ACTIVE", "INACTIVE", "MAINTENANCE"];
+
+type CinemaRoomFormState = CinemaRoomUpdateRequest;
+const EMPTY_FORM: CinemaRoomFormState = { cinemaRoomName: "", seatQuantity: 50, seatsPerRow: 10, type: "STANDARD", status: "ACTIVE" };
+
 export function CinemaRoomManagementPage({ canManage = true }: { canManage?: boolean }) {
   const [rooms, setRooms] = useState<CinemaRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<RoomStatus | "ALL">("ALL");
+  const [typeFilter, setTypeFilter] = useState<RoomType | "ALL">("ALL");
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [operationalSummary, setOperationalSummary] = useState<CinemaRoomOperationalSummary | null>(null);
-  const [statusFilter, setStatusFilter] = useState<RoomStatus>("ACTIVE");
-
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<CinemaRoom | null>(null);
   const [seatViewRoom, setSeatViewRoom] = useState<CinemaRoom | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [restoringId, setRestoringId] = useState<number | null>(null);
-
   const [form, setForm] = useState<CinemaRoomFormState>(EMPTY_FORM);
   const [formError, setFormError] = useState("");
   const [formLoading, setFormLoading] = useState(false);
-
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, message: "", onConfirm: () => {} });
-  const closeConfirm = () => setConfirmDialog(p => ({ ...p, open: false }));
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState>({ open: false, message: "", onConfirm: () => undefined });
 
   const fetchRooms = useCallback(async (page: number) => {
     setLoading(true);
     try {
       const params: GetCinemaRoomsParams = { page, size: PAGE_SIZE };
       if (search.trim()) params.keyword = search.trim();
-      params.status = statusFilter;
+      if (statusFilter !== "ALL") params.status = statusFilter;
       const data = await cinemaRoomService.getCinemaRooms(params);
       setRooms(data.content);
-      setTotalPages(data.totalPages);
-      setTotalElements(data.totalElements);
       setCurrentPage(data.page);
-      void cinemaRoomService.getOperationalSummary()
-        .then(setOperationalSummary)
-        .catch(() => setOperationalSummary(null));
-    } catch (err) {
-      console.error("Failed to fetch cinema rooms", err);
+      setTotalPages(Math.max(1, data.totalPages));
+      setTotalElements(data.totalElements);
+      void cinemaRoomService.getOperationalSummary().then(setOperationalSummary).catch(() => setOperationalSummary(null));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể tải danh sách phòng chiếu."));
     } finally {
       setLoading(false);
     }
   }, [search, statusFilter]);
 
   useEffect(() => {
-    const requestTimer = window.setTimeout(() => fetchRooms(0), 0);
-    return () => window.clearTimeout(requestTimer);
+    const timer = window.setTimeout(() => void fetchRooms(0), 220);
+    return () => window.clearTimeout(timer);
   }, [fetchRooms]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchRooms(0);
+  const visibleRooms = useMemo(() => typeFilter === "ALL" ? rooms : rooms.filter((room) => room.type === typeFilter), [rooms, typeFilter]);
+  const openCreate = () => { setForm(EMPTY_FORM); setFormError(""); setShowCreateModal(true); };
+  const openEdit = (room: CinemaRoom) => { setSelectedRoom(room); setForm({ cinemaRoomName: room.cinemaRoomName, seatQuantity: room.seatQuantity, seatsPerRow: room.seatsPerRow || 10, type: room.type, status: room.status }); setFormError(""); setShowEditModal(true); };
+  const validateRoomForm = (value: CinemaRoomFormState) => {
+    if (!value.cinemaRoomName.trim()) return "Tên phòng chiếu là bắt buộc.";
+    if (!Number.isInteger(value.seatQuantity) || value.seatQuantity < 50 || value.seatQuantity > 200) return "Số lượng ghế phải là số nguyên từ 50 đến 200.";
+    if (value.seatsPerRow !== undefined && (!Number.isInteger(value.seatsPerRow) || value.seatsPerRow < 5 || value.seatsPerRow > 20)) return "Số ghế mỗi hàng phải là số nguyên từ 5 đến 20.";
+    if (!value.type) return "Vui lòng chọn loại phòng.";
+    return "";
   };
-
-  const openCreate = () => {
-    setForm(EMPTY_FORM);
-    setFormError("");
-    setShowCreateModal(true);
-  };
-
-  const openEdit = (room: CinemaRoom) => {
-    setSelectedRoom(room);
-    setForm({
-      cinemaRoomName: room.cinemaRoomName,
-      seatQuantity: room.seatQuantity,
-      seatsPerRow: room.seatsPerRow,
-      type: room.type,
-      status: room.status,
-    });
-    setFormError("");
-    setShowEditModal(true);
-  };
-
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError("");
-    const trimmedName = form.cinemaRoomName.trim();
-    if (!trimmedName) { setFormError("Tên phòng chiếu là bắt buộc."); return; }
-    if (!Number.isInteger(form.seatQuantity) || form.seatQuantity < 50 || form.seatQuantity > 200) { setFormError("Số lượng ghế phải là số nguyên từ 50 đến 200."); return; }
-    if (form.seatsPerRow !== undefined && (form.seatsPerRow < 5 || form.seatsPerRow > 20)) { setFormError("Số ghế mỗi hàng phải từ 5 đến 20."); return; }
-    
-    // Validate duplicates
-    if (rooms.some(r => r.cinemaRoomName.toLowerCase() === trimmedName.toLowerCase())) {
-      setFormError(`Phòng chiếu "${trimmedName}" đã tồn tại.`); return;
-    }
-
+  const handleCreateSubmit = async (event: FormEvent) => {
+    event.preventDefault(); const validationError = validateRoomForm(form); if (validationError) { setFormError(validationError); return; }
+    if (rooms.some((room) => room.cinemaRoomName.trim().toLowerCase() === form.cinemaRoomName.trim().toLowerCase())) { setFormError("Tên phòng chiếu đã tồn tại trong danh sách hiện tại."); return; }
     setFormLoading(true);
-    try {
-      const payload: CinemaRoomCreationRequest = {
-        cinemaRoomName: trimmedName,
-        seatQuantity: form.seatQuantity,
-        seatsPerRow: form.seatsPerRow,
-        type: form.type,
-      };
-      await cinemaRoomService.create(payload);
-      setShowCreateModal(false);
-      fetchRooms(0);
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err, "Tạo phòng chiếu thất bại."));
-    } finally {
-      setFormLoading(false);
-    }
+    try { await cinemaRoomService.create({ cinemaRoomName: form.cinemaRoomName.trim(), seatQuantity: form.seatQuantity, seatsPerRow: form.seatsPerRow, type: form.type }); setShowCreateModal(false); toast.success("Đã tạo phòng chiếu mới."); await fetchRooms(0); }
+    catch (error) { setFormError(getApiErrorMessage(error, "Tạo phòng chiếu thất bại.")); } finally { setFormLoading(false); }
   };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRoom) return;
-    setFormError("");
-    const trimmedName = form.cinemaRoomName.trim();
-    if (!trimmedName) { setFormError("Tên phòng chiếu là bắt buộc."); return; }
-    if (!Number.isInteger(form.seatQuantity) || form.seatQuantity < 50 || form.seatQuantity > 200) { setFormError("Số lượng ghế phải là số nguyên từ 50 đến 200."); return; }
-    if (form.seatsPerRow !== undefined && (form.seatsPerRow < 5 || form.seatsPerRow > 20)) { setFormError("Số ghế mỗi hàng phải từ 5 đến 20."); return; }
-
-    // Validate duplicates (excluding the current one)
-    if (rooms.some(r => r.cinemaRoomId !== selectedRoom.cinemaRoomId && r.cinemaRoomName.toLowerCase() === trimmedName.toLowerCase())) {
-      setFormError(`Phòng chiếu "${trimmedName}" đã tồn tại.`); return;
-    }
-
+  const handleEditSubmit = async (event: FormEvent) => {
+    event.preventDefault(); if (!selectedRoom) return; const validationError = validateRoomForm(form); if (validationError) { setFormError(validationError); return; }
+    if (rooms.some((room) => room.cinemaRoomId !== selectedRoom.cinemaRoomId && room.cinemaRoomName.trim().toLowerCase() === form.cinemaRoomName.trim().toLowerCase())) { setFormError("Tên phòng chiếu đã tồn tại trong danh sách hiện tại."); return; }
     setFormLoading(true);
-    try {
-      await cinemaRoomService.update(selectedRoom.cinemaRoomId, {
-        ...form,
-        cinemaRoomName: trimmedName,
-      });
-      setShowEditModal(false);
-      fetchRooms(currentPage);
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err, "Cập nhật phòng chiếu thất bại."));
-    } finally {
-      setFormLoading(false);
-    }
+    try { await cinemaRoomService.update(selectedRoom.cinemaRoomId, { ...form, cinemaRoomName: form.cinemaRoomName.trim() }); setShowEditModal(false); toast.success("Đã cập nhật phòng chiếu."); await fetchRooms(currentPage); }
+    catch (error) { setFormError(getApiErrorMessage(error, "Cập nhật phòng chiếu thất bại.")); } finally { setFormLoading(false); }
   };
-
-  const handleDelete = (room: CinemaRoom) => {
-    setConfirmDialog({
-      open: true,
-      message: `Vô hiệu hóa phòng chiếu "${room.cinemaRoomName}"?`,
-      onConfirm: async () => {
-        closeConfirm();
-        setDeletingId(room.cinemaRoomId);
-        try {
-          await cinemaRoomService.delete(room.cinemaRoomId);
-          setRooms((prev) =>
-            statusFilter === "ACTIVE"
-              ? prev.filter((item) => item.cinemaRoomId !== room.cinemaRoomId)
-              : prev.map((item) =>
-                  item.cinemaRoomId === room.cinemaRoomId ? { ...item, status: "INACTIVE" } : item
-                )
-          );
-          fetchRooms(currentPage);
-          toast.success("Vô hiệu hóa phòng chiếu thành công.");
-        } catch (err: unknown) {
-          toast.error(getApiErrorMessage(err, "Vô hiệu hóa phòng chiếu thất bại."));
-        } finally {
-          setDeletingId(null);
-        }
-      }
-    });
-  };
-
-  const handleRestore = (room: CinemaRoom) => {
-    setConfirmDialog({
-      open: true,
-      message: `Khôi phục phòng chiếu "${room.cinemaRoomName}" về trạng thái hoạt động?`,
-      onConfirm: async () => {
-        closeConfirm();
-        setRestoringId(room.cinemaRoomId);
-        try {
-          const restoredRoom = await cinemaRoomService.restore(room.cinemaRoomId);
-          setRooms((prev) =>
-            statusFilter === "ACTIVE"
-              ? prev.map((item) => item.cinemaRoomId === room.cinemaRoomId ? restoredRoom : item)
-              : prev.filter((item) => item.cinemaRoomId !== room.cinemaRoomId)
-          );
-          fetchRooms(currentPage);
-          toast.success("Khôi phục phòng chiếu thành công.");
-        } catch (err: unknown) {
-          toast.error(getApiErrorMessage(err, "Khôi phục phòng chiếu thất bại."));
-        } finally {
-          setRestoringId(null);
-        }
-      }
-    });
-  };
-
-  const activeRooms = rooms.filter(room => room.status === "ACTIVE").length;
-  const maintenanceRooms = rooms.filter(room => room.status === "MAINTENANCE").length;
+  const handleDelete = (room: CinemaRoom) => setConfirmDialog({ open: true, message: `Vô hiệu hóa phòng “${room.cinemaRoomName}”? Phòng sẽ không xuất hiện trong các suất chiếu mới.`, onConfirm: async () => { setConfirmDialog((previous) => ({ ...previous, open: false })); setDeletingId(room.cinemaRoomId); try { await cinemaRoomService.delete(room.cinemaRoomId); toast.success("Đã vô hiệu hóa phòng chiếu."); await fetchRooms(currentPage); } catch (error) { toast.error(getApiErrorMessage(error, "Không thể vô hiệu hóa phòng chiếu.")); } finally { setDeletingId(null); } } });
+  const handleRestore = (room: CinemaRoom) => setConfirmDialog({ open: true, message: `Khôi phục phòng “${room.cinemaRoomName}” về trạng thái hoạt động?`, onConfirm: async () => { setConfirmDialog((previous) => ({ ...previous, open: false })); setRestoringId(room.cinemaRoomId); try { await cinemaRoomService.restore(room.cinemaRoomId); toast.success("Đã khôi phục phòng chiếu."); await fetchRooms(currentPage); } catch (error) { toast.error(getApiErrorMessage(error, "Không thể khôi phục phòng chiếu.")); } finally { setRestoringId(null); } } });
+  const activeRooms = rooms.filter((room) => room.status === "ACTIVE").length;
+  const maintenanceRooms = rooms.filter((room) => room.status === "MAINTENANCE").length;
   const currentPageSeats = rooms.reduce((sum, room) => sum + (room.seatQuantity || 0), 0);
-  const roomTypeSummary = useMemo(() => {
-    const counts = new Map<RoomType, number>();
-    rooms.forEach(room => counts.set(room.type, (counts.get(room.type) ?? 0) + 1));
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [rooms]);
 
-  return (
-    <div style={{ flex: 1, overflowY: "auto", background: "#F4F5F7", fontFamily: FONT }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 28px 40px" }}>
-
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 22 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(230,57,70,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <MonitorPlay size={15} color="#E63946" />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.1em" }}>
-                Cinema Rooms
-              </span>
-            </div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em", lineHeight: 1.25 }}>
-              Quản lý phòng chiếu
-            </h1>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>
-              Quản lý cấu hình phòng chiếu, loại phòng, trạng thái vận hành và sơ đồ ghế.
-            </p>
-          </div>
-          {canManage && statusFilter === "ACTIVE" && (
-            <button
-              onClick={openCreate}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "10px 18px", borderRadius: 10, flexShrink: 0,
-                background: "linear-gradient(135deg,#E63946,#c1121f)",
-                color: "#fff", fontFamily: FONT, fontSize: 13, fontWeight: 700,
-                border: "none", cursor: "pointer",
-                boxShadow: "0 4px 14px rgba(230,57,70,0.35)", whiteSpace: "nowrap",
-              }}
-            >
-              <Plus size={16} /> Thêm phòng chiếu
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 18 }}>
-          <RoomStat icon={<MonitorPlay size={17} />} label="Tổng phòng" value={operationalSummary?.totalRooms ?? totalElements} tone="#E63946" />
-          <RoomStat icon={<Rows3 size={17} />} label="Đang hoạt động" value={operationalSummary?.activeRooms ?? activeRooms} tone="#059669" />
-          <RoomStat icon={<Armchair size={17} />} label="Tổng ghế" value={operationalSummary?.totalSeats ?? currentPageSeats} tone="#2563eb" />
-          <RoomStat icon={<Settings2 size={17} />} label="Phòng bảo trì" value={operationalSummary?.maintenanceRooms ?? maintenanceRooms} tone="#d97706" />
-        </div>
-
-        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", padding: 14, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <form onSubmit={handleSearch} style={{ position: "relative", flex: "1 1 280px" }}>
-              <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input
-                type="text"
-                placeholder="Tìm theo tên phòng chiếu..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  width: "100%", padding: "10px 12px 10px 38px",
-                  borderRadius: 10, border: "1px solid #e2e8f0", background: "#f8fafc",
-                  fontFamily: FONT, fontSize: 13, color: "#1e293b", outline: "none", boxSizing: "border-box",
-                }}
-              />
-            </form>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {roomTypeSummary.map(([type, count]) => {
-                const cfg = ROOM_TYPE_CONFIG[type] ?? ROOM_TYPE_CONFIG.STANDARD;
-                return (
-                  <span key={type} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 999, background: cfg.bg, color: cfg.color, fontSize: 12, fontWeight: 700 }}>
-                    {cfg.label} <span style={{ opacity: 0.75 }}>{count}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <div style={{ padding: "14px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>Danh sách phòng chiếu</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-                Trang {currentPage + 1} hiển thị {rooms.length} phòng
-              </div>
-            </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as RoomStatus)}
-              style={{ height: 40, padding: "0 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontFamily: FONT, fontSize: 13, color: "#334155", outline: "none", cursor: "pointer" }}
-            >
-              {ROOM_STATUSES.map((status) => (
-                <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => fetchRooms(currentPage)}
-              title="Làm mới"
-              disabled={loading}
-              style={{ width: 40, height: 40, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", flexShrink: 0 }}
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            </button>
-          </div>
-        </div>
-
-          {loading ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", color: "#94a3b8" }}>
-              <Loader2 size={30} style={{ color: "#E63946", marginBottom: 12 }} className="animate-spin" />
-              <span style={{ fontSize: 14 }}>Đang tải danh sách phòng chiếu...</span>
-            </div>
-          ) : rooms.length === 0 ? (
-            <RoomEmptyState canManage={canManage} search={search} onCreate={openCreate} />
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, padding: 14 }}>
-              {rooms.map((room) => (
-                <RoomCard
-                  key={room.cinemaRoomId}
-                  room={room}
-                  canManage={canManage}
-                  deleting={deletingId === room.cinemaRoomId}
-                  restoring={restoringId === room.cinemaRoomId}
-                  onViewSeats={() => setSeatViewRoom(room)}
-                  onEdit={() => openEdit(room)}
-                  onDelete={() => handleDelete(room)}
-                  onRestore={() => handleRestore(room)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, padding: "0 4px" }}>
-            <span style={{ fontSize: 13, color: "#64748b" }}>
-              Tổng cộng <b>{totalElements}</b> phòng
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <PagBtn disabled={currentPage === 0} onClick={() => fetchRooms(currentPage - 1)}><ChevronLeft size={16} /></PagBtn>
-              <span style={{ fontSize: 13, color: "#334155", fontWeight: 600 }}>Trang {currentPage + 1} / {totalPages}</span>
-              <PagBtn disabled={currentPage >= totalPages - 1} onClick={() => fetchRooms(currentPage + 1)}><ChevronRight size={16} /></PagBtn>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Modals ─────────────────────────────────────────────────────────────── */}
-      {canManage && showCreateModal && (
-        <CinemaRoomFormModal
-          title="Thêm phòng chiếu mới"
-          isEdit={false}
-          form={form} setForm={setForm} formError={formError} formLoading={formLoading}
-          onClose={() => setShowCreateModal(false)} onSubmit={handleCreateSubmit} submitLabel="Tạo"
-        />
-      )}
-      {canManage && showEditModal && selectedRoom && (
-        <CinemaRoomFormModal
-          title="Chỉnh sửa phòng chiếu"
-          isEdit={true}
-          form={form} setForm={setForm} formError={formError} formLoading={formLoading}
-          onClose={() => setShowEditModal(false)} onSubmit={handleEditSubmit} submitLabel="Lưu"
-        />
-      )}
-      {seatViewRoom && (
-        <CinemaRoomSeatsModal
-          room={seatViewRoom}
-          canManage={canManage}
-          onClose={() => setSeatViewRoom(null)}
-        />
-      )}
-      <ConfirmDialog
-        open={confirmDialog.open}
-        message={confirmDialog.message}
-        onConfirm={confirmDialog.onConfirm}
-        onClose={closeConfirm}
-      />
-    </div>
-  );
+  return <main className="min-h-full flex-1 overflow-y-auto bg-[#f6f8fb] text-slate-900"><div className="mx-auto max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+    <header className="mb-7 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-2 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400"><DoorOpen size={15} className="text-rose-500" /> Vận hành rạp <span className="text-slate-300">/</span> Cấu hình phòng</div><h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Phòng chiếu & sơ đồ ghế</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Theo dõi sức chứa, trạng thái vận hành và sắp xếp ghế theo từng phòng trong một workspace trực quan.</p></div>{canManage && <button type="button" onClick={openCreate} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-extrabold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-rose-600"><Plus size={17} /> Thêm phòng chiếu</button>}</header>
+    <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><OverviewCard icon={<MonitorPlay size={19} />} label="Tổng phòng" value={operationalSummary?.totalRooms ?? totalElements} hint="Tất cả trạng thái" tone="rose" /><OverviewCard icon={<CheckCircle2 size={19} />} label="Đang hoạt động" value={operationalSummary?.activeRooms ?? activeRooms} hint="Sẵn sàng nhận lịch" tone="emerald" /><OverviewCard icon={<Armchair size={19} />} label="Tổng sức chứa" value={operationalSummary?.totalSeats ?? currentPageSeats} hint="Số ghế trong hệ thống" tone="blue" /><OverviewCard icon={<Settings2 size={19} />} label="Cần bảo trì" value={operationalSummary?.maintenanceRooms ?? maintenanceRooms} hint="Cần xử lý trước khi mở bán" tone="amber" /></section>
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60"><div className="border-b border-slate-100 p-4 sm:p-5"><div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><h2 className="flex items-center gap-2 text-base font-black text-slate-950"><LayoutGrid size={18} className="text-rose-500" /> Danh sách phòng chiếu</h2><p className="mt-1 text-xs text-slate-500">Chọn “Sơ đồ ghế” để chỉnh loại ghế, trạng thái bảo trì hoặc áp dụng mẫu bố trí.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void fetchRooms(currentPage)} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới</button>{canManage && <button type="button" onClick={openCreate} className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-extrabold text-white transition hover:bg-rose-700"><Plus size={14} /> Tạo phòng</button>}</div></div><div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]"><label className="relative block"><span className="sr-only">Tìm phòng chiếu</span><Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo tên phòng chiếu..." className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100" /></label><label className="relative block"><span className="sr-only">Lọc loại phòng</span><SlidersHorizontal size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" /><select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as RoomType | "ALL")} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm font-semibold text-slate-700 outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-100"><option value="ALL">Tất cả loại phòng</option>{ROOM_TYPES.map((type) => <option key={type} value={type}>{ROOM_TYPE_CONFIG[type].label}</option>)}</select></label></div><div className="mt-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar">{ROOM_STATUSES.map((status) => { const active = statusFilter === status; const config = status === "ALL" ? null : STATUS_CONFIG[status]; return <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 text-xs font-extrabold transition ${active ? "border-slate-950 bg-slate-950 text-white shadow-sm" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800"}`}>{config && <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />}{status === "ALL" ? "Tất cả phòng" : config?.label}</button>; })}</div></div>
+      {loading ? <LoadingState /> : visibleRooms.length === 0 ? <EmptyState canManage={canManage} hasFilter={Boolean(search.trim()) || statusFilter !== "ALL" || typeFilter !== "ALL"} onCreate={openCreate} /> : <><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[840px] text-left"><thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400"><tr><th className="px-5 py-3.5">Phòng chiếu</th><th className="px-4 py-3.5">Sức chứa</th><th className="px-4 py-3.5">Sơ đồ</th><th className="px-4 py-3.5">Trạng thái</th><th className="px-5 py-3.5 text-right">Thao tác</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleRooms.map((room) => <RoomTableRow key={room.cinemaRoomId} room={room} canManage={canManage} deleting={deletingId === room.cinemaRoomId} restoring={restoringId === room.cinemaRoomId} onViewSeats={() => setSeatViewRoom(room)} onEdit={() => openEdit(room)} onDelete={() => handleDelete(room)} onRestore={() => handleRestore(room)} />)}</tbody></table></div><div className="grid gap-3 p-3 md:hidden">{visibleRooms.map((room) => <RoomMobileCard key={room.cinemaRoomId} room={room} canManage={canManage} deleting={deletingId === room.cinemaRoomId} restoring={restoringId === room.cinemaRoomId} onViewSeats={() => setSeatViewRoom(room)} onEdit={() => openEdit(room)} onDelete={() => handleDelete(room)} onRestore={() => handleRestore(room)} />)}</div><div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><span>Hiển thị <b className="text-slate-800">{visibleRooms.length}</b> / {totalElements} phòng</span>{totalPages > 1 && <div className="flex items-center gap-2"><PageButton disabled={currentPage === 0} onClick={() => void fetchRooms(currentPage - 1)}><ChevronLeft size={15} /></PageButton><span className="min-w-20 text-center font-bold text-slate-700">Trang {currentPage + 1} / {totalPages}</span><PageButton disabled={currentPage >= totalPages - 1} onClick={() => void fetchRooms(currentPage + 1)}><ChevronRight size={15} /></PageButton></div>}</div></>}
+    </section>
+  </div>{canManage && showCreateModal && <CinemaRoomFormModal title="Tạo phòng chiếu" subtitle="Thiết lập sức chứa và loại phòng trước khi mở lịch chiếu." form={form} setForm={setForm} formError={formError} loading={formLoading} onClose={() => setShowCreateModal(false)} onSubmit={handleCreateSubmit} submitLabel="Tạo phòng" />}{canManage && showEditModal && selectedRoom && <CinemaRoomFormModal title="Chỉnh sửa phòng chiếu" subtitle="Thay đổi cấu hình phòng khi chưa có suất chiếu đang hoạt động." isEdit form={form} setForm={setForm} formError={formError} loading={formLoading} onClose={() => setShowEditModal(false)} onSubmit={handleEditSubmit} submitLabel="Lưu thay đổi" />}{seatViewRoom && <CinemaRoomSeatsModal room={seatViewRoom} canManage={canManage} onClose={() => setSeatViewRoom(null)} />}<ConfirmDialog {...confirmDialog} onClose={() => setConfirmDialog((previous) => ({ ...previous, open: false }))} /></main>;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function RoomStat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
-  return (
-    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: `${tone}14`, color: tone, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em" }}>{label}</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>{value}</div>
-      </div>
-    </div>
-  );
-}
+function OverviewCard({ icon, label, value, hint, tone }: { icon: ReactNode; label: string; value: number; hint: string; tone: "rose" | "emerald" | "blue" | "amber" }) { const tones = { rose: "bg-rose-50 text-rose-600", emerald: "bg-emerald-50 text-emerald-600", blue: "bg-blue-50 text-blue-600", amber: "bg-amber-50 text-amber-600" }; return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/50"><div className="flex items-start justify-between gap-3"><span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>{icon}</span><span className="rounded-full bg-slate-50 px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">Magi Cinema</span></div><div className="mt-4 text-[11px] font-extrabold uppercase tracking-[0.11em] text-slate-400">{label}</div><div className="mt-1 text-2xl font-black tracking-tight text-slate-950">{value.toLocaleString("vi-VN")}</div><div className="mt-1 text-xs text-slate-500">{hint}</div></div>; }
+function RoomTableRow({ room, canManage, deleting, restoring, onViewSeats, onEdit, onDelete, onRestore }: RoomActionsProps) { const roomType = ROOM_TYPE_CONFIG[room.type] || ROOM_TYPE_CONFIG.STANDARD; const seatCount = room.seatQuantity || 0; const perRow = room.seatsPerRow || 10; return <tr className="group transition hover:bg-slate-50/80"><td className="px-5 py-4"><div className="flex min-w-[240px] items-center gap-3"><div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${roomType.soft} ${roomType.color}`}><MonitorPlay size={19} /></div><div><div className="font-extrabold text-slate-900">{room.cinemaRoomName}</div><div className="mt-0.5 text-xs text-slate-400">Mã phòng #{room.cinemaRoomId} · {roomType.label}</div></div></div></td><td className="px-4 py-4"><div className="font-extrabold text-slate-800">{seatCount} ghế</div><div className="mt-1 text-xs text-slate-400">{Math.ceil(seatCount / perRow)} hàng · {perRow}/hàng</div></td><td className="px-4 py-4"><button type="button" onClick={onViewSeats} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-extrabold text-slate-700 shadow-sm transition hover:border-rose-300 hover:text-rose-600"><LayoutGrid size={14} /> Mở sơ đồ</button></td><td className="px-4 py-4"><StatusBadge status={room.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1.5"><IconButton label="Xem sơ đồ ghế" onClick={onViewSeats}><Eye size={16} /></IconButton>{canManage && <><IconButton label="Chỉnh sửa phòng" onClick={onEdit}><Edit size={16} /></IconButton>{room.status === "INACTIVE" ? <IconButton label="Khôi phục phòng" onClick={onRestore} disabled={restoring}>{restoring ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}</IconButton> : <IconButton label="Vô hiệu hóa phòng" onClick={onDelete} disabled={deleting}>{deleting ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}</IconButton>}</>}</div></td></tr>; }
+function RoomMobileCard({ room, canManage, deleting, restoring, onViewSeats, onEdit, onDelete, onRestore }: RoomActionsProps) { const roomType = ROOM_TYPE_CONFIG[room.type] || ROOM_TYPE_CONFIG.STANDARD; return <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${roomType.soft} ${roomType.color}`}><MonitorPlay size={17} /></div><div><h3 className="font-extrabold text-slate-900">{room.cinemaRoomName}</h3><p className="mt-0.5 text-xs text-slate-400">{roomType.label} · #{room.cinemaRoomId}</p></div></div><StatusBadge status={room.status} /></div><div className="mt-4 grid grid-cols-2 gap-2"><Metric label="Sức chứa" value={`${room.seatQuantity || 0} ghế`} /><Metric label="Bố trí" value={`${Math.ceil((room.seatQuantity || 0) / (room.seatsPerRow || 10))} hàng`} /></div><div className="mt-4 flex items-center justify-between gap-2"><button type="button" onClick={onViewSeats} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-slate-950 text-xs font-extrabold text-white"><LayoutGrid size={14} /> Sơ đồ ghế</button>{canManage && <div className="flex gap-1"><IconButton label="Chỉnh sửa phòng" onClick={onEdit}><Edit size={15} /></IconButton>{room.status === "INACTIVE" ? <IconButton label="Khôi phục phòng" onClick={onRestore} disabled={restoring}><RefreshCw size={15} /></IconButton> : <IconButton label="Vô hiệu hóa phòng" onClick={onDelete} disabled={deleting}><Ban size={15} /></IconButton>}</div>}</div></article>; }
+type RoomActionsProps = { room: CinemaRoom; canManage: boolean; deleting: boolean; restoring: boolean; onViewSeats: () => void; onEdit: () => void; onDelete: () => void; onRestore: () => void };
+function StatusBadge({ status }: { status: RoomStatus }) { const config = STATUS_CONFIG[status] || STATUS_CONFIG.INACTIVE; return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${config.soft} ${config.tone}`}><span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />{config.label}</span>; }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-slate-50 px-3 py-2"><div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">{label}</div><div className="mt-1 text-sm font-extrabold text-slate-800">{value}</div></div>; }
+function IconButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) { return <button type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-white hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40">{children}</button>; }
+function PageButton({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: ReactNode }) { return <button type="button" onClick={onClick} disabled={disabled} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300">{children}</button>; }
+function LoadingState() { return <div className="flex min-h-[330px] flex-col items-center justify-center gap-3 text-sm text-slate-400"><Loader2 size={28} className="animate-spin text-rose-500" /><span>Đang tải dữ liệu phòng chiếu...</span></div>; }
+function EmptyState({ canManage, hasFilter, onCreate }: { canManage: boolean; hasFilter: boolean; onCreate: () => void }) { return <div className="flex min-h-[330px] flex-col items-center justify-center px-6 text-center"><span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><DoorOpen size={26} /></span><h3 className="mt-4 text-base font-black text-slate-900">{hasFilter ? "Không tìm thấy phòng phù hợp" : "Chưa có phòng chiếu"}</h3><p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">{hasFilter ? "Thử bỏ bớt bộ lọc hoặc tìm bằng tên khác." : "Tạo phòng để bắt đầu thiết lập sơ đồ ghế và lịch chiếu."}</p>{canManage && !hasFilter && <button type="button" onClick={onCreate} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-rose-700"><Plus size={14} /> Tạo phòng đầu tiên</button>}</div>; }
 
-function RoomCard({
-  room, canManage, deleting, restoring, onViewSeats, onEdit, onDelete, onRestore,
-}: {
-  room: CinemaRoom;
-  canManage: boolean;
-  deleting: boolean;
-  restoring: boolean;
-  onViewSeats: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onRestore: () => void;
-}) {
-  const status = STATUS_CONFIG[room.status] ?? STATUS_CONFIG.INACTIVE;
-  const type = ROOM_TYPE_CONFIG[room.type] ?? ROOM_TYPE_CONFIG.STANDARD;
-  const seatsPerRow = room.seatsPerRow || 10;
-  const rowCount = Math.ceil((room.seatQuantity || 0) / seatsPerRow);
-
-  return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, background: "#fff", minHeight: 174, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: type.bg, color: type.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <MonitorPlay size={18} />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{room.cinemaRoomName}</div>
-          </div>
-        </div>
-        <span style={{ padding: "4px 9px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: status.bg, color: status.color, whiteSpace: "nowrap", flexShrink: 0 }}>
-          {status.label}
-        </span>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginTop: 16 }}>
-        <RoomMetric label="Loại" value={type.label} />
-        <RoomMetric label="Hàng" value={String(rowCount)} />
-      </div>
-
-      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <button
-          onClick={onViewSeats}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc", color: "#475569", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-        >
-          <Eye size={14} /> Sơ đồ ghế
-        </button>
-        {canManage && (
-          <div style={{ display: "flex", gap: 4 }}>
-            <ActionBtn title="Chỉnh sửa" onClick={onEdit}><Edit size={15} /></ActionBtn>
-            {room.status === "INACTIVE" ? (
-              <ActionBtn title="Khôi phục" disabled={restoring} onClick={onRestore}>
-                {restoring ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-              </ActionBtn>
-            ) : (
-              <ActionBtn title="Vô hiệu hóa" disabled={deleting} onClick={onDelete}>
-                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Ban size={15} />}
-              </ActionBtn>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RoomMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ background: "#f8fafc", border: "1px solid #eef2f7", borderRadius: 8, padding: "8px 9px", minWidth: 0 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.05em" }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#334155", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
-    </div>
-  );
-}
-
-function RoomEmptyState({ search, canManage, onCreate }: { search: string; canManage: boolean; onCreate: () => void }) {
-  return (
-    <div style={{ padding: "64px 20px", textAlign: "center", color: "#64748b" }}>
-      <div style={{ width: 46, height: 46, borderRadius: 12, background: "#f1f5f9", color: "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-        <MonitorPlay size={22} />
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>
-        {search.trim() ? "Không tìm thấy phòng chiếu" : "Chưa có phòng chiếu"}
-      </div>
-      <div style={{ fontSize: 13, marginBottom: canManage ? 16 : 0 }}>
-        {search.trim() ? "Thử đổi từ khóa tìm kiếm hoặc tạo phòng chiếu mới." : "Tạo phòng chiếu để bắt đầu cấu hình sơ đồ ghế và lịch chiếu."}
-      </div>
-      {canManage && (
-        <button onClick={onCreate} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", borderRadius: 9, border: "none", background: "#E63946", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-          <Plus size={15} /> Thêm phòng chiếu
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ActionBtn({ title, onClick, disabled, children }: { title: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
-  return (
-    <button title={title} onClick={onClick} disabled={disabled}
-      style={{
-        width: 32, height: 32, borderRadius: 8, border: "none", cursor: disabled ? "not-allowed" : "pointer",
-        background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-        color: "#94a3b8", opacity: disabled ? 0.4 : 1, transition: "background 0.15s, color 0.15s",
-      }}
-      onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; } }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function PagBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} disabled={disabled}
-      style={{
-        width: 32, height: 32, borderRadius: 8, border: "1px solid #e2e8f0", background: disabled ? "#f8fafc" : "#fff",
-        cursor: disabled ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-        color: disabled ? "#cbd5e1" : "#475569",
-      }}
-    >{children}</button>
-  );
-}
-
-function ModalBtn({ variant, type = "button", onClick, disabled, children }: {
-  variant: "primary" | "cancel"; type?: "button" | "submit"; onClick?: () => void; disabled?: boolean; children: React.ReactNode;
-}) {
-  const isPrimary = variant === "primary";
-  return (
-    <button type={type} onClick={onClick} disabled={disabled}
-      style={{
-        padding: "9px 20px", borderRadius: 8, border: "none", cursor: disabled ? "not-allowed" : "pointer",
-        fontSize: 13, fontWeight: 600, fontFamily: FONT, opacity: disabled ? 0.6 : 1,
-        background: isPrimary ? "#E63946" : "#f1f5f9",
-        color: isPrimary ? "#fff" : "#475569",
-        display: "flex", alignItems: "center", gap: 6,
-      }}
-    >{children}</button>
-  );
-}
-
-function CinemaRoomFormModal({ title, isEdit, form, setForm, formError, formLoading, onClose, onSubmit, submitLabel }: {
-  title: string; isEdit: boolean;
-  form: CinemaRoomFormState;
-  setForm: React.Dispatch<React.SetStateAction<CinemaRoomFormState>>;
-  formError: string; formLoading: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; submitLabel: string;
-}) {
-  return (
-    <div 
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,23,42,0.48)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onClick={onClose}
-    >
-      <div 
-        style={{ position: "relative", background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, boxShadow: "0 24px 64px rgba(0,0,0,0.18)", fontFamily: FONT, overflow: "hidden" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#0f172a" }}>{title}</h3>
-            <p style={{ margin: "3px 0 0", fontSize: 12, color: "#64748b" }}>Cấu hình số ghế, hàng ghế và định dạng phòng chiếu.</p>
-          </div>
-          <button 
-            type="button"
-            onClick={onClose} 
-            style={{ 
-              width: 30, height: 30, borderRadius: "50%", 
-              background: "rgba(0,0,0,0.05)", border: "none", cursor: "pointer", 
-              color: "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.2s"
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "#E63946";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "rgba(0,0,0,0.05)";
-              e.currentTarget.style.color = "#94a3b8";
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={onSubmit} style={{ padding: "20px 24px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label className={LABEL_CLS}>Tên phòng chiếu *</label>
-              <input type="text" required className={INPUT_CLS} value={form.cinemaRoomName} onChange={(e) => setForm({ ...form, cinemaRoomName: e.target.value })} placeholder="Phòng 1, phòng IMAX..." />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              <div>
-                <label className={LABEL_CLS}>Số lượng ghế *</label>
-                <input type="number" min={50} max={200} required className={INPUT_CLS} value={form.seatQuantity} onChange={(e) => setForm({ ...form, seatQuantity: +e.target.value })} />
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Ghế / hàng</label>
-                <input type="number" min={5} max={20} placeholder="10" className={INPUT_CLS} value={form.seatsPerRow || ""} onChange={(e) => setForm({ ...form, seatsPerRow: +e.target.value || undefined })} />
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Loại phòng</label>
-                <select className={INPUT_CLS} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as RoomType })}>
-                  {ROOM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            {isEdit && (
-              <div>
-                <label className={LABEL_CLS}>Trạng thái</label>
-                <select className={INPUT_CLS} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as RoomStatus })}>
-                  {ROOM_STATUSES.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}
-                </select>
-              </div>
-            )}
-          </div>
-          {formError && (
-            <div style={{ marginTop: 14, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 14px", color: "#dc2626", fontSize: 13 }}>
-              {formError}
-            </div>
-          )}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-            <ModalBtn variant="cancel" type="button" onClick={onClose}>Hủy</ModalBtn>
-            <ModalBtn variant="primary" type="submit" disabled={formLoading}>
-              {formLoading && <Loader2 size={14} className="animate-spin" />}
-              {formLoading ? "Đang xử lý..." : submitLabel}
-            </ModalBtn>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
+function CinemaRoomFormModal({ title, subtitle, isEdit = false, form, setForm, formError, loading, onClose, onSubmit, submitLabel }: { title: string; subtitle: string; isEdit?: boolean; form: CinemaRoomFormState; setForm: Dispatch<SetStateAction<CinemaRoomFormState>>; formError: string; loading: boolean; onClose: () => void; onSubmit: (event: FormEvent) => void; submitLabel: string }) { return <ModalShell onClose={onClose} width="max-w-xl"><div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5"><div><div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-rose-500"><DoorOpen size={14} /> Cấu hình phòng</div><h2 className="text-xl font-black text-slate-950">{title}</h2><p className="mt-1 text-sm text-slate-500">{subtitle}</p></div><CloseButton onClick={onClose} /></div><form onSubmit={onSubmit} className="space-y-5 px-6 py-6"><Field label="Tên phòng chiếu" required><input autoFocus required value={form.cinemaRoomName} onChange={(event) => setForm((previous) => ({ ...previous, cinemaRoomName: event.target.value }))} placeholder="Ví dụ: Phòng 01 - IMAX" className={INPUT_CLASS} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Số lượng ghế" required hint="Từ 50 đến 200 ghế"><input type="number" min={50} max={200} required value={form.seatQuantity} onChange={(event) => setForm((previous) => ({ ...previous, seatQuantity: Number(event.target.value) }))} className={INPUT_CLASS} /></Field><Field label="Ghế mỗi hàng" hint="Từ 5 đến 20 ghế"><input type="number" min={5} max={20} value={form.seatsPerRow || 10} onChange={(event) => setForm((previous) => ({ ...previous, seatsPerRow: Number(event.target.value) }))} className={INPUT_CLASS} /></Field></div><Field label="Loại phòng"><div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{ROOM_TYPES.map((type) => { const config = ROOM_TYPE_CONFIG[type]; const selected = form.type === type; return <button type="button" key={type} onClick={() => setForm((previous) => ({ ...previous, type }))} className={`rounded-xl border px-2 py-3 text-xs font-extrabold transition ${selected ? `${config.soft} ${config.color} ring-2 ring-rose-200` : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}>{config.label}</button>; })}</div></Field>{isEdit && <Field label="Trạng thái"><select value={form.status} onChange={(event) => setForm((previous) => ({ ...previous, status: event.target.value as RoomStatus }))} className={INPUT_CLASS}>{ROOM_STATUSES.filter((status): status is RoomStatus => status !== "ALL").map((status) => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></Field>}{formError && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm leading-6 text-rose-700"><CircleHelp size={17} className="mt-0.5 shrink-0" />{formError}</div>}<div className="flex justify-end gap-2 border-t border-slate-100 pt-5"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Hủy</button><button type="submit" disabled={loading} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-extrabold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50">{loading && <Loader2 size={15} className="animate-spin" />}{submitLabel}</button></div></form></ModalShell>; }
+const INPUT_CLASS = "h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100";
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: ReactNode }) { return <label className="block"><span className="mb-1.5 flex items-center justify-between text-xs font-extrabold text-slate-600"><span>{label}{required && <b className="ml-1 text-rose-500">*</b>}</span>{hint && <small className="font-medium text-slate-400">{hint}</small>}</span>{children}</label>; }
+function ModalShell({ onClose, width = "max-w-2xl", children }: { onClose: () => void; width?: string; children: ReactNode }) { return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={onClose}><div className={`max-h-[94vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${width}`} onMouseDown={(event) => event.stopPropagation()}>{children}</div></div>; }
+function CloseButton({ onClick }: { onClick: () => void }) { return <button type="button" onClick={onClick} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"><X size={17} /></button>; }
+type ConfirmState = { open: boolean; message: string; onConfirm: () => void };
+function ConfirmDialog({ open, message, onConfirm, onClose }: ConfirmState & { onClose: () => void }) { if (!open) return null; return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={onClose}><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><div className="flex gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><AlertTriangle size={20} /></span><div><h3 className="font-black text-slate-950">Xác nhận thao tác</h3><p className="mt-2 text-sm leading-6 text-slate-500">{message}</p></div></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600">Hủy</button><button type="button" onClick={onConfirm} className="rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-amber-600">Đồng ý</button></div></div></div>; }
 
 function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; canManage: boolean; onClose: () => void }) {
   const [seats, setSeats] = useState<Seat[]>([]);
@@ -687,773 +185,40 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
   const [loading, setLoading] = useState(true);
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [selectedRowLabel, setSelectedRowLabel] = useState<string | null>(null);
-  
-  // Single edit state
   const [editForm, setEditForm] = useState<SeatUpdateRequest | null>(null);
-  // Bulk edit state
   const [bulkType, setBulkType] = useState<SeatType | "">("");
   const [bulkStatus, setBulkStatus] = useState<SeatStatus | "">("");
-  
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showLayoutWizard, setShowLayoutWizard] = useState(false);
   const [layoutSaving, setLayoutSaving] = useState(false);
   const [layoutError, setLayoutError] = useState("");
+  const fetchSeats = useCallback(async () => { setLoading(true); try { const [data, stats] = await Promise.all([seatService.getSeats({ cinemaRoomId: room.cinemaRoomId, page: 0, size: Math.max(room.seatQuantity + 20, 400) }), cinemaRoomService.getSeatSummary(room.cinemaRoomId)]); const sorted = [...data.content].sort(compareSeats); setSeats(sorted); setSummary(stats); setSelectedSeats((previous) => previous.map((seat) => sorted.find((next) => next.seatId === seat.seatId)).filter(Boolean) as Seat[]); } catch (fetchError) { toast.error(getApiErrorMessage(fetchError, "Không thể tải sơ đồ ghế.")); } finally { setLoading(false); } }, [room.cinemaRoomId, room.seatQuantity]);
+  useEffect(() => { const timer = window.setTimeout(() => { void fetchSeats(); }, 0); return () => window.clearTimeout(timer); }, [fetchSeats]);
+  const rows = useMemo(() => { const grouped = new Map<string, Seat[]>(); seats.forEach((seat) => grouped.set(seat.seatRow, [...(grouped.get(seat.seatRow) || []), seat])); return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true })); }, [seats]);
+  const coupleRows = rows.filter(([, rowSeats]) => rowSeats.some(isSeatInCurrentLayout));
+  const couplePlacementRow = coupleRows.length ? coupleRows[coupleRows.length - 1][0] : "";
+  const activeCount = summary?.activeSeats ?? seats.filter((seat) => seat.status === "ACTIVE").length;
+  const maintenanceCount = summary?.maintenanceSeats ?? seats.filter((seat) => seat.status === "MAINTENANCE").length;
+  const clearSelection = () => { setSelectedSeats([]); setSelectedRowLabel(null); setEditForm(null); setBulkType(""); setBulkStatus(""); setError(""); };
+  const updateSelection = (next: Seat[]) => { setSelectedSeats(next); setSelectedRowLabel(null); setError(""); if (next.length === 1) setEditForm(toSeatForm(next[0])); else { setEditForm(null); setBulkType(""); setBulkStatus(""); } };
+  const toggleSeat = (seat: Seat) => { if (!canManage) return; const selected = selectedSeats.some((current) => current.seatId === seat.seatId); updateSelection(selected ? selectedSeats.filter((current) => current.seatId !== seat.seatId) : [...selectedSeats, seat]); };
+  const toggleRow = (label: string, rowSeats: Seat[]) => { if (!canManage) return; const allSelected = rowSeats.every((seat) => selectedSeats.some((current) => current.seatId === seat.seatId)); const next = allSelected && selectedRowLabel === label ? [] : [...rowSeats]; setSelectedSeats(next); setSelectedRowLabel(next.length ? label : null); setEditForm(null); setBulkType(""); setBulkStatus(""); setError(""); };
+  const handleSaveSingle = async (event: FormEvent) => { event.preventDefault(); if (!canManage || selectedSeats.length !== 1 || !editForm) return; if (!editForm.seatRow.trim() || !editForm.seatCode.trim() || !Number.isInteger(editForm.seatNumber) || editForm.seatNumber <= 0) { setError("Vui lòng nhập hàng, số ghế và mã hiển thị hợp lệ."); return; } if (editForm.type === "COUPLE") { setError("Ghế đôi cần được chọn theo cặp liền kề. Hãy chọn 2 ghế cạnh nhau trong sơ đồ."); return; } setSaving(true); setError(""); try { await seatService.update(selectedSeats[0].seatId, { ...editForm, cinemaRoomId: room.cinemaRoomId, seatRow: editForm.seatRow.trim().toUpperCase(), seatCode: editForm.seatCode.trim().toUpperCase(), seatNumber: Number(editForm.seatNumber) }); await fetchSeats(); toast.success("Đã cập nhật ghế."); } catch (saveError) { setError(getApiErrorMessage(saveError, "Cập nhật ghế thất bại.")); } finally { setSaving(false); } };
+  const handleSaveBulk = async (event: FormEvent) => { event.preventDefault(); if (!canManage || selectedSeats.length < 2) return; if (!bulkType && !bulkStatus) { setError("Chọn loại ghế hoặc trạng thái cần cập nhật."); return; } if (bulkType === "COUPLE") { const coupleError = validateCoupleSelection(selectedSeats, couplePlacementRow); if (coupleError) { setError(coupleError); return; } } setSaving(true); setError(""); try { await seatService.bulkUpdate({ seatIds: selectedSeats.map((seat) => seat.seatId), type: bulkType || undefined, status: bulkStatus || undefined }); await fetchSeats(); toast.success(`Đã cập nhật ${selectedSeats.length} ghế.`); } catch (saveError) { setError(getApiErrorMessage(saveError, "Cập nhật nhiều ghế thất bại.")); } finally { setSaving(false); } };
+  const handleQuickStatus = async (status: SeatStatus) => { if (!canManage || !selectedSeats.length || saving) return; setSaving(true); setError(""); try { await seatService.bulkUpdate({ seatIds: selectedSeats.map((seat) => seat.seatId), status }); await fetchSeats(); toast.success(`Đã chuyển ${selectedSeats.length} ghế sang “${SEAT_STATUS_CONFIG[status].label}”.`); } catch (saveError) { setError(getApiErrorMessage(saveError, "Cập nhật trạng thái ghế thất bại.")); } finally { setSaving(false); } };
+  const handleApplyLayout = async (request: SeatLayoutRequest) => { setLayoutSaving(true); setLayoutError(""); try { await cinemaRoomService.applySeatLayout(room.cinemaRoomId, request); toast.success("Đã áp dụng mẫu bố trí ghế."); setShowLayoutWizard(false); clearSelection(); await fetchSeats(); } catch (layoutSaveError) { setLayoutError(getApiErrorMessage(layoutSaveError, "Không thể áp dụng mẫu bố trí.")); } finally { setLayoutSaving(false); } };
 
-  const fetchSeats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await seatService.getSeats({
-        cinemaRoomId: room.cinemaRoomId,
-        page: 0,
-        size: Math.max(room.seatQuantity + 20, 400), // Get all seats
-      });
-      const sorted = [...data.content].sort(compareSeats);
-      setSeats(sorted);
-      // The summary is a separate endpoint so the cards remain accurate even
-      // when a room has more seats than the page-size fallback above.
-      void cinemaRoomService.getSeatSummary(room.cinemaRoomId)
-        .then(setSummary)
-        .catch(() => setSummary(null));
-      
-      // Refresh selections
-      setSelectedSeats(prev => {
-        if (prev.length === 0) return [];
-        const newSel = prev.map(p => sorted.find(s => s.seatId === p.seatId)).filter(Boolean) as Seat[];
-        setSelectedRowLabel(label => label && newSel.every(s => s.seatRow === label) ? label : null);
-        if (newSel.length === 1) {
-          setEditForm(toSeatForm(newSel[0]));
-        }
-        return newSel;
-      });
-    } catch (err) {
-      console.error("Failed to fetch seats", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [room.cinemaRoomId, room.seatQuantity]);
-
-  useEffect(() => {
-    const requestTimer = window.setTimeout(fetchSeats, 0);
-    return () => window.clearTimeout(requestTimer);
-  }, [fetchSeats]);
-
-  const rows = useMemo(() => {
-    const grouped = new Map<string, Seat[]>();
-    seats.forEach(s => {
-      if (!grouped.has(s.seatRow)) grouped.set(s.seatRow, []);
-      grouped.get(s.seatRow)!.push(s);
-    });
-    return Array.from(grouped.entries()).sort((a,b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
-  }, [seats]);
-  const couplePlacementRowLabel = useMemo(() => {
-    const availableRows = rows.filter(([, rowSeats]) =>
-      rowSeats.some(isSeatInCurrentLayout)
-    );
-    return availableRows.length > 0 ? availableRows[availableRows.length - 1][0] : "";
-  }, [rows]);
-
-  const toggleSeat = (seat: Seat) => {
-    if (!canManage) return;
-    setSelectedRowLabel(null);
-    setSelectedSeats(prev => {
-      const isSelected = prev.some(s => s.seatId === seat.seatId);
-      let newSel;
-      if (isSelected) {
-        newSel = prev.filter(s => s.seatId !== seat.seatId);
-      } else {
-        newSel = [...prev, seat];
-      }
-      if (newSel.length === 1) {
-        setEditForm(toSeatForm(newSel[0]));
-      } else {
-        setEditForm(null);
-        setBulkType("");
-        setBulkStatus("");
-      }
-      setError("");
-      return newSel;
-    });
-  };
-
-  const handleSeatHover = (e: React.MouseEvent, seat: Seat) => {
-    if (!canManage) return;
-    if (e.shiftKey || e.buttons === 1) {
-      setSelectedRowLabel(null);
-      setSelectedSeats(prev => {
-        if (prev.some(s => s.seatId === seat.seatId)) return prev;
-        const newSel = [...prev, seat];
-        if (newSel.length === 1) {
-          setEditForm(toSeatForm(newSel[0]));
-        } else {
-          setEditForm(null);
-          setBulkType("");
-          setBulkStatus("");
-        }
-        setError("");
-        return newSel;
-      });
-    }
-  };
-
-  const toggleRow = (rowLabel: string, rowSeats: Seat[]) => {
-    if (!canManage) return;
-    setSelectedSeats(prev => {
-      const allSelected = rowSeats.length > 0 && rowSeats.every(rs => prev.some(p => p.seatId === rs.seatId));
-      const newSel = allSelected && selectedRowLabel === rowLabel ? [] : [...rowSeats].sort(compareSeats);
-      setSelectedRowLabel(newSel.length > 0 ? rowLabel : null);
-      setEditForm(null);
-      setBulkType("");
-      setBulkStatus("");
-      setError("");
-      return newSel;
-    });
-  };
-
-  const clearSelection = () => {
-    setSelectedSeats([]);
-    setSelectedRowLabel(null);
-    setEditForm(null);
-    setBulkType("");
-    setBulkStatus("");
-    setError("");
-  };
-
-  const handleSaveSingle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canManage) return;
-    if (selectedSeats.length !== 1 || !editForm) return;
-    if (!editForm.seatRow.trim() || !editForm.seatCode.trim() || editForm.seatNumber <= 0) {
-      setError("Vui lòng nhập đầy đủ hàng, số và mã ghế.");
-      return;
-    }
-    if (editForm.type === "COUPLE") {
-      setError("Ghế couple phải được cấu hình theo cặp liền kề. Hãy chọn 2 ghế cạnh nhau hoặc chọn cả hàng rồi đổi loại ghế.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    try {
-      await seatService.update(selectedSeats[0].seatId, {
-        ...editForm,
-        cinemaRoomId: room.cinemaRoomId,
-        seatRow: editForm.seatRow.trim().toUpperCase(),
-        seatCode: editForm.seatCode.trim().toUpperCase(),
-        seatNumber: Number(editForm.seatNumber),
-      });
-      fetchSeats(); // Refresh all to keep layout in sync
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Cập nhật ghế thất bại."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveBulk = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canManage) return;
-    if (selectedSeats.length < 2) return;
-    if (!bulkType && !bulkStatus) {
-      setError("Vui lòng chọn loại ghế hoặc trạng thái để cập nhật.");
-      return;
-    }
-    if (bulkType === "COUPLE") {
-      const coupleError = validateCoupleSelection(selectedSeats, couplePlacementRowLabel);
-      if (coupleError) {
-        setError(coupleError);
-        return;
-      }
-    }
-
-    setSaving(true);
-    setError("");
-    try {
-      await seatService.bulkUpdate({
-        seatIds: selectedSeats.map(s => s.seatId),
-        type: bulkType || undefined,
-        status: bulkStatus || undefined,
-      });
-      fetchSeats();
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Cập nhật nhiều ghế thất bại."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleQuickBulkStatus = async (status: SeatStatus) => {
-    if (!canManage || selectedSeats.length === 0 || saving) return;
-    setSaving(true);
-    setError("");
-    setBulkStatus(status);
-    try {
-      await seatService.bulkUpdate({
-        seatIds: selectedSeats.map(s => s.seatId),
-        status,
-      });
-      toast.success(`Đã cập nhật trạng thái ${selectedSeats.length} ghế.`);
-      fetchSeats();
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Cập nhật trạng thái ghế thất bại."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleApplyLayout = async (request: SeatLayoutRequest) => {
-    if (!canManage || layoutSaving) return;
-    setLayoutSaving(true);
-    setLayoutError("");
-    try {
-      await cinemaRoomService.applySeatLayout(room.cinemaRoomId, request);
-      toast.success("Đã tạo lại sơ đồ ghế theo mẫu.");
-      setShowLayoutWizard(false);
-      clearSelection();
-      await fetchSeats();
-    } catch (err: unknown) {
-      setLayoutError(getApiErrorMessage(err, "Không thể tạo lại sơ đồ ghế."));
-    } finally {
-      setLayoutSaving(false);
-    }
-  };
-
-  const activeCount = seats.filter((seat) => seat.status === "ACTIVE").length;
-  const maintenanceCount = seats.filter((seat) => seat.status === "MAINTENANCE").length;
-
-  const DARK_INPUT = {
-    width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px",
-    color: "#f8fafc", fontSize: 14, outline: "none", boxSizing: "border-box" as const, transition: "border 0.2s"
-  };
-  const LABEL_STYLES = {
-    display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 6, letterSpacing: "0.05em"
-  };
-
-  const getSeatStyle = (seat: Seat, isSelected: boolean) => {
-    if (isSelected) return { bg: "rgba(244,63,94,0.15)", border: "#f43f5e", color: "#f43f5e", shadow: "0 0 15px rgba(244,63,94,0.4)" };
-    if (seat.status === "INACTIVE") return { bg: "transparent", border: "#334155", color: "#475569", shadow: "none" };
-    if (seat.status === "MAINTENANCE") return { bg: "rgba(245,158,11,0.1)", border: "#f59e0b", color: "#fcd34d", shadow: "0 0 10px rgba(245,158,11,0.2)" };
-    
-    switch (seat.type) {
-      case "VIP": return { bg: "rgba(139,92,246,0.15)", border: "#8b5cf6", color: "#ddd6fe", shadow: "0 0 12px rgba(139,92,246,0.3)" };
-      case "COUPLE": return { bg: "rgba(236,72,153,0.15)", border: "#ec4899", color: "#fbcfe8", shadow: "0 0 12px rgba(236,72,153,0.3)" };
-      case "DISABLED": return { bg: "rgba(14,116,144,0.15)", border: "#06b6d4", color: "#67e8f9", shadow: "0 0 12px rgba(14,116,144,0.3)" };
-      default: return { bg: "rgba(59,130,246,0.1)", border: "#3b82f6", color: "#bfdbfe", shadow: "0 0 10px rgba(59,130,246,0.2)" };
-    }
-  };
-
-  return (
-    <div 
-      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-      onClick={onClose}
-    >
-      <div 
-        style={{ position: "relative", background: "#0f172a", borderRadius: 20, width: "100%", maxWidth: 1280, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.4)", fontFamily: FONT, overflow: "hidden", border: "1px solid #1e293b" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(56,189,248,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Armchair size={15} color="#38bdf8" />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.15em" }}>Sơ đồ ghế ngồi</span>
-            </div>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#f8fafc" }}>{room.cinemaRoomName}</h3>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94a3b8" }}>
-              Tổng {summary?.totalSeats ?? seats.length} ghế · <span style={{ color: "#10b981" }}>{summary?.activeSeats ?? activeCount} hoạt động</span> · <span style={{ color: "#f59e0b" }}>{summary?.maintenanceSeats ?? maintenanceCount} bảo trì</span>
-            </p>
-            {summary && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                <SummaryPill label="Thường" value={summary.normalSeats} color="#60a5fa" />
-                <SummaryPill label="VIP" value={summary.vipSeats} color="#c4b5fd" />
-                <SummaryPill label="Đôi" value={summary.coupleSeats} color="#f9a8d4" />
-                <SummaryPill label="Hỗ trợ" value={summary.accessibleSeats} color="#67e8f9" />
-              </div>
-            )}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => { setLayoutError(""); setShowLayoutWizard(true); }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 34, padding: "0 12px", borderRadius: 9, border: "1px solid rgba(56,189,248,0.35)", background: "rgba(56,189,248,0.1)", color: "#7dd3fc", fontSize: 12, fontWeight: 800, cursor: "pointer" }}
-                title="Tạo lại sơ đồ theo mẫu"
-              >
-                <Wand2 size={14} /> Bố trí tự động
-              </button>
-            )}
-            <button
-            onClick={onClose}
-            style={{ 
-              width: 32, height: 32, borderRadius: "50%", 
-              background: "rgba(255,255,255,0.05)", border: "none", cursor: "pointer", 
-              color: "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.2s"
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "#E63946";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-              e.currentTarget.style.color = "#94a3b8";
-            }}
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 0, minHeight: 0, flex: 1, userSelect: "none" }}>
-          <div style={{ padding: "32px 12px", overflow: "auto", background: "#0b0f19", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            
-            {/* Glowing Screen Design */}
-            <div style={{
-              height: 48, width: "100%", maxWidth: 640, margin: "0 auto 64px",
-              background: "linear-gradient(to bottom, rgba(56,189,248,0.2), transparent)",
-              boxShadow: "0 10px 40px rgba(56,189,248,0.1)",
-              borderRadius: "50% 50% 0 0 / 100% 100% 0 0",
-              borderTop: "3px solid rgba(56,189,248,0.6)",
-              position: "relative", display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
-              <span style={{ color: "rgba(56,189,248,0.5)", fontSize: 12, letterSpacing: "0.5em", fontWeight: 800 }}>Màn hình</span>
-            </div>
-
-            {loading ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, color: "#64748b" }}>
-                <Loader2 size={32} style={{ color: "#38bdf8", marginBottom: 16 }} className="animate-spin" />
-                <span style={{ fontSize: 14, letterSpacing: "0.05em" }}>Đang khởi tạo sơ đồ ghế...</span>
-              </div>
-            ) : seats.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "80px 0", color: "#64748b", fontSize: 14 }}>
-                Chưa có ghế nào cho phòng chiếu này.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center", width: "100%", maxWidth: 1000 }}>
-                {rows.map(([rowLabel, rowSeats]) => {
-                  const allSelected = rowSeats.length > 0 && rowSeats.every(rs => selectedSeats.some(s => s.seatId === rs.seatId));
-                  return (
-                    <div key={rowLabel} style={{ display: "flex", alignItems: "center", position: "relative", paddingLeft: 46, minHeight: 42, width: "100%" }}>
-                      <button 
-                        onClick={() => toggleRow(rowLabel, rowSeats)} 
-                        title={`Chọn hàng ${rowLabel} để đổi nhanh trạng thái ghế`}
-                        style={{ 
-                          position: "absolute", left: 0,
-                          width: 38, height: 42, flexShrink: 0, fontWeight: 900, fontSize: 15, 
-                          color: allSelected ? "#fecdd3" : "#cbd5e1",
-                          background: allSelected ? "rgba(244,63,94,0.18)" : "rgba(30,41,59,0.85)",
-                          border: allSelected ? "1px solid rgba(244,63,94,0.65)" : "1px solid #334155",
-                          borderRadius: 10,
-                          cursor: "pointer", 
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          transition: "all 0.2s",
-                          boxShadow: allSelected ? "0 0 16px rgba(244,63,94,0.25)" : "none"
-                        }}
-                      >
-                        {rowLabel}
-                      </button>
-                      <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", flex: 1 }}>
-                        {rowSeats.sort((a, b) => a.seatNumber - b.seatNumber).map(seat => {
-                          const selected = selectedSeats.some(s => s.seatId === seat.seatId);
-                          const sStyle = getSeatStyle(seat, selected);
-                          
-                          return (
-                            <button
-                              key={seat.seatId}
-                              type="button"
-                              onClick={() => toggleSeat(seat)}
-                              onMouseEnter={(e) => handleSeatHover(e, seat)}
-                              title={`${seat.seatCode} · ${SEAT_TYPE_CONFIG[seat.type]?.label} · ${SEAT_STATUS_CONFIG[seat.status]?.label}`}
-                              style={{
-                                width: 38, height: 38,
-                                borderRadius: "8px 8px 4px 4px",
-                                border: `1px solid ${sStyle.border}`,
-                                borderBottom: `4px solid ${sStyle.border}`,
-                                background: sStyle.bg,
-                                color: sStyle.color,
-                                cursor: "pointer",
-                                fontSize: 11, fontWeight: 800,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
-                                transform: selected ? "translateY(-3px)" : "none",
-                                boxShadow: sStyle.shadow,
-                                outline: "none", position: "relative",
-                                opacity: seat.status === "INACTIVE" ? 0.4 : 1
-                              }}
-                            >
-                              {seat.seatCode}
-                              {seat.type === "VIP" && seat.status !== "INACTIVE" && (
-                                <div style={{ position: "absolute", top: -5, right: -5, width: 12, height: 12, borderRadius: "50%", background: "#8b5cf6", border: "2px solid #0f172a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <span style={{ fontSize: 7, color: "#fff" }}>★</span>
-                                </div>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Legend inside map */}
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", marginTop: 60, padding: "16px 28px", background: "rgba(30,41,59,0.7)", borderRadius: 16, border: "1px solid #1e293b", backdropFilter: "blur(4px)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", borderBottom: "3px solid #3b82f6" }} />
-                Thường
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(139,92,246,0.15)", border: "1px solid #8b5cf6", borderBottom: "3px solid #8b5cf6" }} />
-                VIP
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(236,72,153,0.15)", border: "1px solid #ec4899", borderBottom: "3px solid #ec4899" }} />
-                Couple
-              </div>
-              <div style={{ width: 1, height: 18, background: "#334155", margin: "0 4px" }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(244,63,94,0.15)", border: "1px solid #f43f5e", borderBottom: "3px solid #f43f5e" }} />
-                Đang chọn
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "rgba(245,158,11,0.1)", border: "1px solid #f59e0b", borderBottom: "3px solid #f59e0b" }} />
-                Bảo trì
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: "transparent", border: "1px solid #334155", borderBottom: "3px solid #334155", opacity: 0.5 }} />
-                Vô hiệu
-              </div>
-            </div>
-          </div>
-
-          <aside style={{ borderLeft: "1px solid #1e293b", padding: 28, overflowY: "auto", background: "#1e293b" }}>
-            {selectedSeats.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, textAlign: "center", color: "#64748b" }}>
-                <Armchair size={48} style={{ marginBottom: 16, color: "#334155" }} />
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#94a3b8" }}>Chưa chọn ghế nào</div>
-                <div style={{ fontSize: 13, marginTop: 8, maxWidth: 240, lineHeight: 1.6 }}>Nhấp vào ghế để chỉnh sửa.<br/>Bấm nhãn hàng bên trái để chọn nguyên hàng và đổi nhanh trạng thái.</div>
-              </div>
-            ) : selectedSeats.length === 1 && editForm ? (
-              <form onSubmit={handleSaveSingle} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", background: "#0f172a", padding: 16, borderRadius: 12, border: "1px solid #334155" }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em" }}>Đang chỉnh sửa</div>
-                    <div style={{ marginTop: 4, fontSize: 26, fontWeight: 900, color: "#38bdf8" }}>{selectedSeats[0].seatCode}</div>
-                  </div>
-                  <button type="button" onClick={clearSelection} style={{ fontSize: 12, color: "#f43f5e", background: "rgba(244,63,94,0.1)", border: "none", cursor: "pointer", fontWeight: 700, padding: "6px 12px", borderRadius: 6 }}>Bỏ chọn</button>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                  <div>
-                    <label style={{ ...LABEL_STYLES }}>Hàng</label>
-                    <input style={{ ...DARK_INPUT }} value={editForm.seatRow} maxLength={5} onChange={(e) => setEditForm({ ...editForm, seatRow: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={{ ...LABEL_STYLES }}>Số</label>
-                    <input type="number" min={1} style={{ ...DARK_INPUT }} value={editForm.seatNumber} onChange={(e) => setEditForm({ ...editForm, seatNumber: Number(e.target.value) })} />
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ ...LABEL_STYLES }}>Mã ghế (Hiển thị)</label>
-                  <input style={{ ...DARK_INPUT }} value={editForm.seatCode} maxLength={10} onChange={(e) => setEditForm({ ...editForm, seatCode: e.target.value })} />
-                </div>
-
-                <div style={{ height: 1, background: "#334155", margin: "4px 0" }} />
-
-                <div>
-                  <label style={{ ...LABEL_STYLES }}>Loại ghế</label>
-                  <select style={{ ...DARK_INPUT }} value={editForm.type ?? "NORMAL"} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as SeatType })}>
-                    {SEAT_TYPES.map((type) => <option key={type} value={type} style={{ background: "#1e293b" }}>{SEAT_TYPE_CONFIG[type].label}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ ...LABEL_STYLES }}>Trạng thái</label>
-                  <select style={{ ...DARK_INPUT }} value={editForm.status ?? "ACTIVE"} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as SeatStatus })}>
-                    {SEAT_STATUSES.map((status) => <option key={status} value={status} style={{ background: "#1e293b" }}>{SEAT_STATUS_CONFIG[status].label}</option>)}
-                  </select>
-                </div>
-
-                {error && (
-                  <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: "12px", color: "#f43f5e", fontSize: 13, fontWeight: 500 }}>
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  style={{ marginTop: 12, height: 46, borderRadius: 12, border: "none", background: saving ? "#475569" : "#38bdf8", color: saving ? "#94a3b8" : "#0f172a", fontSize: 14, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: saving ? "none" : "0 6px 20px rgba(56,189,248,0.3)", transition: "all 0.2s" }}
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  {saving ? "Đang lưu..." : "Lưu thay đổi"}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleSaveBulk} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", background: "#0f172a", padding: 16, borderRadius: 12, border: "1px solid #334155" }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em" }}>
-                      {selectedRowLabel ? `Cập nhật hàng ${selectedRowLabel}` : "Cập nhật hàng loạt"}
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: 20, fontWeight: 900, color: "#38bdf8" }}>
-                      {selectedSeats.length} ghế{selectedRowLabel ? " trong hàng" : ""}
-                    </div>
-                  </div>
-                  <button type="button" onClick={clearSelection} style={{ fontSize: 12, color: "#f43f5e", background: "rgba(244,63,94,0.1)", border: "none", cursor: "pointer", fontWeight: 700, padding: "6px 12px", borderRadius: 6 }}>Bỏ chọn tất cả</button>
-                </div>
-                
-                <div style={{ padding: 14, background: "#0f172a", borderRadius: 10, border: "1px solid #334155", maxHeight: 120, overflowY: "auto", fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
-                  {selectedSeats.map(s => s.seatCode).join(", ")}
-                </div>
-
-                <div style={{ height: 1, background: "#334155", margin: "4px 0" }} />
-
-                <div>
-                  <label style={{ ...LABEL_STYLES }}>Đổi nhanh trạng thái</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-                    {SEAT_STATUSES.map((status) => {
-                      const cfg = SEAT_STATUS_CONFIG[status];
-                      return (
-                        <button
-                          key={status}
-                          type="button"
-                          disabled={saving}
-                          onClick={() => handleQuickBulkStatus(status)}
-                          style={{
-                            minHeight: 38,
-                            borderRadius: 9,
-                            border: `1px solid ${cfg.border}`,
-                            background: saving ? "#334155" : cfg.bg,
-                            color: saving ? "#64748b" : cfg.color,
-                            fontSize: 12,
-                            fontWeight: 800,
-                            cursor: saving ? "not-allowed" : "pointer",
-                            padding: "6px 8px",
-                          }}
-                        >
-                          {cfg.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ ...LABEL_STYLES }}>Đổi loại ghế thành</label>
-                  <select style={{ ...DARK_INPUT }} value={bulkType} onChange={(e) => setBulkType(e.target.value as SeatType)}>
-                    <option value="" style={{ background: "#1e293b" }}>-- Không thay đổi --</option>
-                    {SEAT_TYPES.map((type) => <option key={type} value={type} style={{ background: "#1e293b" }}>{SEAT_TYPE_CONFIG[type].label}</option>)}
-                  </select>
-                  {bulkType === "COUPLE" && (
-                    <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5, color: "#f9a8d4" }}>
-                      Ghế couple chỉ đặt ở hàng cuối còn hoạt động {couplePlacementRowLabel ? `(${couplePlacementRowLabel})` : ""} và phải chọn theo cặp liền kề, ví dụ {couplePlacementRowLabel || "A"}1-{couplePlacementRowLabel || "A"}2.
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label style={{ ...LABEL_STYLES }}>Đổi trạng thái thành</label>
-                  <select style={{ ...DARK_INPUT }} value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as SeatStatus)}>
-                    <option value="" style={{ background: "#1e293b" }}>-- Không thay đổi --</option>
-                    {SEAT_STATUSES.map((status) => <option key={status} value={status} style={{ background: "#1e293b" }}>{SEAT_STATUS_CONFIG[status].label}</option>)}
-                  </select>
-                </div>
-
-                {error && (
-                  <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: "12px", color: "#f43f5e", fontSize: 13, fontWeight: 500 }}>
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={saving || (!bulkType && !bulkStatus)}
-                  style={{ marginTop: 12, height: 46, borderRadius: 12, border: "none", background: (saving || (!bulkType && !bulkStatus)) ? "#334155" : "#38bdf8", color: (saving || (!bulkType && !bulkStatus)) ? "#64748b" : "#0f172a", fontSize: 14, fontWeight: 800, cursor: (saving || (!bulkType && !bulkStatus)) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: (saving || (!bulkType && !bulkStatus)) ? "none" : "0 6px 20px rgba(56,189,248,0.3)", transition: "all 0.2s" }}
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  {saving ? "Đang xử lý..." : "Áp dụng cho tất cả"}
-                </button>
-              </form>
-            )}
-          </aside>
-        </div>
-      </div>
-      {showLayoutWizard && canManage && (
-        <SeatLayoutWizard
-          room={room}
-          saving={layoutSaving}
-          error={layoutError}
-          onClose={() => setShowLayoutWizard(false)}
-          onSubmit={handleApplyLayout}
-        />
-      )}
-    </div>
-  );
+  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-2 backdrop-blur-sm sm:p-5" onMouseDown={onClose}><div className="flex h-[min(94vh,900px)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-[#f6f8fb] shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><header className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6"><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white"><Armchair size={21} /></span><div><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-rose-500">Workspace sơ đồ ghế <span className="text-slate-300">·</span> {ROOM_TYPE_CONFIG[room.type]?.label || "Phòng"}</div><h2 className="mt-1 text-lg font-black text-slate-950 sm:text-xl">{room.cinemaRoomName}</h2><p className="mt-0.5 text-xs text-slate-500">{summary?.totalSeats ?? seats.length} ghế · <span className="font-bold text-emerald-600">{activeCount} hoạt động</span> · <span className="font-bold text-amber-600">{maintenanceCount} bảo trì</span></p></div></div><div className="flex items-center gap-2 self-end md:self-auto">{canManage && <button type="button" onClick={() => { setLayoutError(""); setShowLayoutWizard(true); }} className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 text-xs font-extrabold text-violet-700 transition hover:bg-violet-100"><Wand2 size={15} /> <span className="hidden sm:inline">Bố trí tự động</span></button>}<CloseButton onClick={onClose} /></div></div></header><div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_370px]"><section className="min-h-0 overflow-y-auto bg-[#eef2f7] p-3 sm:p-6"><div className="mx-auto max-w-[980px]"><div className="rounded-2xl border border-slate-300/80 bg-gradient-to-b from-slate-800 to-slate-950 px-4 py-5 text-center shadow-xl shadow-slate-400/20"><div className="mx-auto h-2 max-w-[720px] rounded-full bg-gradient-to-r from-slate-600 via-white to-slate-600 opacity-90" /><div className="mt-2 text-[10px] font-black uppercase tracking-[0.35em] text-slate-300">Màn hình</div></div><div className="my-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] font-bold text-slate-500"><LegendItem color="bg-blue-100 border-blue-300" label="Thường" /><LegendItem color="bg-violet-100 border-violet-300" label="VIP" /><LegendItem color="bg-pink-100 border-pink-300" label="Đôi" /><LegendItem color="bg-cyan-100 border-cyan-300" label="Hỗ trợ" /><LegendItem color="bg-amber-100 border-amber-300" label="Bảo trì" /><LegendItem color="bg-slate-200 border-slate-300" label="Vô hiệu" /></div>{loading ? <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-sm text-slate-500"><Loader2 size={28} className="animate-spin text-rose-500" />Đang tải sơ đồ ghế...</div> : seats.length === 0 ? <div className="flex min-h-[360px] flex-col items-center justify-center text-center text-sm text-slate-500"><Armchair size={35} className="mb-3 text-slate-300" />Phòng chưa có ghế. Hãy dùng “Bố trí tự động” để tạo layout.</div> : <div className="space-y-2.5 rounded-2xl border border-white/80 bg-white/65 p-3 shadow-inner sm:p-5">{rows.map(([label, rowSeats]) => { const allSelected = rowSeats.every((seat) => selectedSeats.some((current) => current.seatId === seat.seatId)); return <div key={label} className="flex min-h-12 items-center gap-2 sm:gap-3"><button type="button" onClick={() => toggleRow(label, rowSeats)} disabled={!canManage} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black transition ${allSelected ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500 hover:border-slate-400"}`}>{label}</button><div className="flex min-w-0 flex-1 flex-wrap justify-center gap-1.5 sm:gap-2">{[...rowSeats].sort((left, right) => left.seatNumber - right.seatNumber).map((seat) => { const selected = selectedSeats.some((current) => current.seatId === seat.seatId); const couple = seat.type === "COUPLE"; return <button key={seat.seatId} type="button" disabled={!canManage} onClick={() => toggleSeat(seat)} title={`${seat.seatCode} · ${SEAT_TYPE_CONFIG[seat.type].label} · ${SEAT_STATUS_CONFIG[seat.status].label}`} className={`relative flex h-9 items-center justify-center rounded-t-lg rounded-b-[4px] border-2 px-1 text-[10px] font-black leading-none transition hover:-translate-y-0.5 disabled:cursor-default ${couple ? "w-[76px] sm:w-[88px]" : "w-9"} ${selected ? "border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-300/70" : seat.status === "MAINTENANCE" ? "border-amber-400 bg-amber-50 text-amber-700" : seat.status === "INACTIVE" ? "border-slate-300 bg-slate-100 text-slate-400 opacity-70" : `${SEAT_TYPE_CONFIG[seat.type].border} ${SEAT_TYPE_CONFIG[seat.type].background} ${SEAT_TYPE_CONFIG[seat.type].color}`}`}>{seat.seatCode}</button>; })}</div><span className="hidden w-9 shrink-0 text-center text-xs font-black text-slate-400 sm:block">{label}</span></div>; })}</div>}</div></section><aside className="min-h-0 overflow-y-auto border-t border-slate-200 bg-white p-4 sm:p-5 xl:border-l xl:border-t-0"><div className="mb-5 grid grid-cols-2 gap-2"><MiniStat icon={<Armchair size={15} />} label="Tổng ghế" value={summary?.totalSeats ?? seats.length} /><MiniStat icon={<CheckCircle2 size={15} />} label="Hoạt động" value={activeCount} /><MiniStat icon={<Settings2 size={15} />} label="Bảo trì" value={maintenanceCount} /><MiniStat icon={<Rows3 size={15} />} label="Số hàng" value={summary?.rowCount ?? rows.length} /></div>{!canManage ? <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-800"><div className="flex items-center gap-2 font-extrabold"><Eye size={16} /> Chế độ chỉ xem</div><p className="mt-1 text-xs text-blue-700">Tài khoản hiện tại có thể kiểm tra sơ đồ nhưng không thể chỉnh sửa.</p></div> : selectedSeats.length === 0 ? <div className="flex min-h-[230px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 text-center"><SlidersHorizontal size={27} className="mb-3 text-slate-300" /><div className="text-sm font-extrabold text-slate-700">Chưa chọn ghế</div><p className="mt-1 text-xs leading-5 text-slate-500">Chọn một ghế để chỉnh chi tiết hoặc chọn nhãn hàng để cập nhật cả hàng.</p></div> : selectedSeats.length === 1 && editForm ? <SingleSeatEditor seat={selectedSeats[0]} form={editForm} setForm={setEditForm} saving={saving} error={error} onClear={clearSelection} onSubmit={handleSaveSingle} /> : <BulkSeatEditor selectedSeats={selectedSeats} selectedRowLabel={selectedRowLabel} bulkType={bulkType} bulkStatus={bulkStatus} setBulkType={setBulkType} setBulkStatus={setBulkStatus} saving={saving} error={error} couplePlacementRow={couplePlacementRow} onClear={clearSelection} onQuickStatus={handleQuickStatus} onSubmit={handleSaveBulk} />}</aside></div></div>{showLayoutWizard && canManage && <SeatLayoutWizard room={room} saving={layoutSaving} error={layoutError} onClose={() => setShowLayoutWizard(false)} onSubmit={handleApplyLayout} />}</div>;
 }
 
-function SummaryPill({ label, value, color }: { label: string; value: number; color: string }) {
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 7px", borderRadius: 999, background: "rgba(15,23,42,0.8)", color, fontSize: 10, fontWeight: 800 }}>{label} {value}</span>;
-}
-
-function SeatLayoutWizard({
-  room,
-  saving,
-  error,
-  onClose,
-  onSubmit,
-}: {
-  room: CinemaRoom;
-  saving: boolean;
-  error: string;
-  onClose: () => void;
-  onSubmit: (request: SeatLayoutRequest) => void;
-}) {
-  const [form, setForm] = useState<SeatLayoutRequest>({
-    seatQuantity: room.seatQuantity || 50,
-    seatsPerRow: room.seatsPerRow || 10,
-    vipRowsFromBack: 2,
-    coupleSeatsOnLastRow: 0,
-    accessibleSeatsOnFirstRow: 2,
-  });
-  const rowCount = Math.ceil(form.seatQuantity / Math.max(1, form.seatsPerRow));
-  const lastRowCapacity = form.seatQuantity - ((rowCount - 1) * form.seatsPerRow);
-  const coupleCount = form.coupleSeatsOnLastRow || 0;
-  const invalidCouple = coupleCount % 2 !== 0 || coupleCount > lastRowCapacity;
-  const invalidVip = (form.vipRowsFromBack || 0) > rowCount;
-  const invalidAccessible = (form.accessibleSeatsOnFirstRow || 0) > Math.min(form.seatsPerRow, form.seatQuantity);
-  const invalid = !Number.isInteger(form.seatQuantity) || !Number.isInteger(form.seatsPerRow) || form.seatQuantity < 50 || form.seatQuantity > 200 || form.seatsPerRow < 5 || form.seatsPerRow > 20 || invalidCouple || invalidVip || invalidAccessible;
-
-  const updateNumber = (key: keyof SeatLayoutRequest, value: string) => {
-    const parsed = Number(value);
-    setForm(prev => ({ ...prev, [key]: Number.isFinite(parsed) ? parsed : 0 }));
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(2,6,23,0.72)", backdropFilter: "blur(5px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 500, background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.35)", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: "18px 22px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0369a1", fontSize: 12, fontWeight: 800, letterSpacing: "0.08em" }}><Wand2 size={15} /> MẪU BỐ TRÍ NHANH</div>
-            <h3 style={{ margin: "7px 0 0", fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Tạo lại sơ đồ {room.cinemaRoomName}</h3>
-            <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: "#64748b" }}>Dùng cho phòng chưa phát hành suất chiếu. Ghế cũ sẽ được sắp xếp lại theo thứ tự hàng.</p>
-          </div>
-          <button type="button" onClick={onClose} style={{ width: 30, height: 30, border: "none", borderRadius: "50%", background: "#f1f5f9", color: "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} /></button>
-        </div>
-        <form onSubmit={e => { e.preventDefault(); if (!invalid) onSubmit(form); }} style={{ padding: 22 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <WizardNumber label="Tổng số ghế" min={50} max={200} value={form.seatQuantity} onChange={v => updateNumber("seatQuantity", v)} />
-            <WizardNumber label="Ghế mỗi hàng" min={5} max={20} value={form.seatsPerRow} onChange={v => updateNumber("seatsPerRow", v)} />
-            <WizardNumber label="Hàng VIP (từ sau)" min={0} max={5} value={form.vipRowsFromBack || 0} onChange={v => updateNumber("vipRowsFromBack", v)} />
-            <WizardNumber label="Ghế đôi hàng cuối" min={0} max={12} step={2} value={form.coupleSeatsOnLastRow || 0} onChange={v => updateNumber("coupleSeatsOnLastRow", v)} />
-            <WizardNumber label="Ghế hỗ trợ hàng đầu" min={0} max={6} value={form.accessibleSeatsOnFirstRow || 0} onChange={v => updateNumber("accessibleSeatsOnFirstRow", v)} />
-          </div>
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 13, lineHeight: 1.65 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Số hàng dự kiến</span><strong style={{ color: "#0f172a" }}>{rowCount}</strong></div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Sức chứa hàng cuối</span><strong style={{ color: "#0f172a" }}>{lastRowCapacity}</strong></div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Phân loại</span><strong style={{ color: "#0f172a" }}>{Math.max(0, form.seatQuantity - (form.coupleSeatsOnLastRow || 0) - (form.accessibleSeatsOnFirstRow || 0))} thường/VIP + {form.coupleSeatsOnLastRow || 0} đôi + {form.accessibleSeatsOnFirstRow || 0} hỗ trợ</strong></div>
-          </div>
-          {(invalidCouple || invalidVip || invalidAccessible) && <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 9, background: "#fff7ed", border: "1px solid #fed7aa", color: "#c2410c", fontSize: 12, lineHeight: 1.5 }}>{invalidCouple ? "Ghế đôi phải là số chẵn và không vượt quá hàng cuối. " : ""}{invalidVip ? "Số hàng VIP vượt quá số hàng phòng. " : ""}{invalidAccessible ? "Ghế hỗ trợ vượt quá hàng đầu. " : ""}</div>}
-          {error && <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 9, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-            <button type="button" onClick={onClose} style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 700, cursor: "pointer" }}>Hủy</button>
-            <button type="submit" disabled={saving || invalid} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: saving || invalid ? "#cbd5e1" : "#0284c7", color: "#fff", fontWeight: 800, cursor: saving || invalid ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 7 }}>{saving && <Loader2 size={14} className="animate-spin" />}{saving ? "Đang áp dụng..." : "Áp dụng sơ đồ"}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function WizardNumber({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: string) => void }) {
-  return <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 800, color: "#64748b" }}>{label}<input type="number" min={min} max={max} step={step} value={value} onChange={e => onChange(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", border: "1px solid #cbd5e1", borderRadius: 8, color: "#0f172a", fontSize: 14, fontWeight: 700, outline: "none" }} /></label>;
-}
-
-function compareSeats(a: Seat, b: Seat) {
-  return a.seatRow.localeCompare(b.seatRow, undefined, { numeric: true })
-    || a.seatNumber - b.seatNumber
-    || a.seatId - b.seatId;
-}
-
-function validateCoupleSelection(selectedSeats: Seat[], couplePlacementRowLabel: string) {
-  if (selectedSeats.some((seat) => !isSeatInCurrentLayout(seat))) {
-    return "Không thể đổi ghế đã vô hiệu thành ghế couple. Hãy chọn các ghế còn trong layout hiện tại.";
-  }
-
-  const seatsByRow = new Map<string, Seat[]>();
-  selectedSeats.forEach((seat) => {
-    const rowSeats = seatsByRow.get(seat.seatRow) ?? [];
-    rowSeats.push(seat);
-    seatsByRow.set(seat.seatRow, rowSeats);
-  });
-
-  for (const [row, rowSeats] of seatsByRow.entries()) {
-    if (couplePlacementRowLabel && row !== couplePlacementRowLabel) {
-      return `Ghế couple chỉ được đặt ở hàng cuối cùng còn hoạt động (${couplePlacementRowLabel}). Hàng ${row} không hợp lệ.`;
-    }
-
-    const sortedSeats = [...rowSeats].sort((a, b) => a.seatNumber - b.seatNumber || a.seatId - b.seatId);
-    if (sortedSeats.length % 2 !== 0) {
-      return `Hàng ${row} đang chọn lẻ ghế. Ghế couple phải đi theo từng cặp.`;
-    }
-
-    for (let i = 0; i < sortedSeats.length; i += 2) {
-      const leftSeat = sortedSeats[i];
-      const rightSeat = sortedSeats[i + 1];
-      if (rightSeat.seatNumber !== leftSeat.seatNumber + 1) {
-        return `Ghế couple phải là 2 ghế liền kề trong cùng hàng. Cặp gần ${leftSeat.seatCode} chưa hợp lệ.`;
-      }
-    }
-  }
-
-  return "";
-}
-
-function isSeatInCurrentLayout(seat: Seat) {
-  return seat.status !== "INACTIVE";
-}
-
-function toSeatForm(seat: Seat): SeatUpdateRequest {
-  return {
-    cinemaRoomId: seat.cinemaRoomId,
-    seatRow: seat.seatRow,
-    seatNumber: seat.seatNumber,
-    seatCode: seat.seatCode,
-    type: seat.type,
-    status: seat.status,
-  };
-}
-
-function ConfirmDialog({ open, message, onConfirm, onClose }: {
-  open: boolean; message: string; onConfirm: () => void; onClose: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div 
-      style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(15,23,42,0.4)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onClick={onClose}
-    >
-      <div 
-        style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 400, padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.15)", fontFamily: "Inter, sans-serif" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(245,158,11,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <AlertTriangle size={20} color="#d97706" />
-          </div>
-          <div>
-            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Xác nhận</h3>
-            <p style={{ margin: 0, fontSize: 14, color: "#475569", lineHeight: 1.5 }}>{message}</p>
-          </div>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
-          <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Hủy</button>
-          <button onClick={onConfirm} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(245,158,11,0.25)" }}>Đồng ý</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+function MiniStat({ icon, label, value }: { icon: ReactNode; label: string; value: number }) { return <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{icon}{label}</div><div className="mt-1 text-lg font-black text-slate-900">{value.toLocaleString("vi-VN")}</div></div>; }
+function LegendItem({ color, label }: { color: string; label: string }) { return <span className="inline-flex items-center gap-1.5"><i className={`h-3 w-3 rounded border ${color}`} />{label}</span>; }
+function SingleSeatEditor({ seat, form, setForm, saving, error, onClear, onSubmit }: { seat: Seat; form: SeatUpdateRequest; setForm: Dispatch<SetStateAction<SeatUpdateRequest | null>>; saving: boolean; error: string; onClear: () => void; onSubmit: (event: FormEvent) => void }) { return <form onSubmit={onSubmit} className="space-y-4"><div className="flex items-center justify-between rounded-xl bg-slate-950 p-4 text-white"><div><div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">Đang chỉnh sửa</div><div className="mt-1 text-2xl font-black">{seat.seatCode}</div></div><button type="button" onClick={onClear} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/20">Bỏ chọn</button></div><div className="grid grid-cols-2 gap-3"><Field label="Hàng"><input value={form.seatRow} onChange={(event) => setForm((previous) => previous ? { ...previous, seatRow: event.target.value } : previous)} className={INPUT_CLASS} maxLength={5} /></Field><Field label="Số ghế"><input type="number" min={1} value={form.seatNumber} onChange={(event) => setForm((previous) => previous ? { ...previous, seatNumber: Number(event.target.value) } : previous)} className={INPUT_CLASS} /></Field></div><Field label="Mã hiển thị"><input value={form.seatCode} onChange={(event) => setForm((previous) => previous ? { ...previous, seatCode: event.target.value } : previous)} className={INPUT_CLASS} maxLength={10} /></Field><Field label="Loại ghế"><select value={form.type || "NORMAL"} onChange={(event) => setForm((previous) => previous ? { ...previous, type: event.target.value as SeatType } : previous)} className={INPUT_CLASS}>{SEAT_TYPES.map((type) => <option key={type} value={type}>{SEAT_TYPE_CONFIG[type].label}</option>)}</select></Field><Field label="Trạng thái"><select value={form.status || "ACTIVE"} onChange={(event) => setForm((previous) => previous ? { ...previous, status: event.target.value as SeatStatus } : previous)} className={INPUT_CLASS}>{SEAT_STATUSES.map((status) => <option key={status} value={status}>{SEAT_STATUS_CONFIG[status].label}</option>)}</select></Field>{error && <InlineError message={error} />}<button type="submit" disabled={saving} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-extrabold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50">{saving && <Loader2 size={15} className="animate-spin" />} Lưu thông tin ghế</button></form>; }
+function BulkSeatEditor({ selectedSeats, selectedRowLabel, bulkType, bulkStatus, setBulkType, setBulkStatus, saving, error, couplePlacementRow, onClear, onQuickStatus, onSubmit }: { selectedSeats: Seat[]; selectedRowLabel: string | null; bulkType: SeatType | ""; bulkStatus: SeatStatus | ""; setBulkType: (value: SeatType | "") => void; setBulkStatus: (value: SeatStatus | "") => void; saving: boolean; error: string; couplePlacementRow: string; onClear: () => void; onQuickStatus: (status: SeatStatus) => void; onSubmit: (event: FormEvent) => void }) { return <form onSubmit={onSubmit} className="space-y-4"><div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4"><div><div className="text-[10px] font-black uppercase tracking-[0.1em] text-rose-500">{selectedRowLabel ? `Hàng ${selectedRowLabel}` : "Cập nhật hàng loạt"}</div><div className="mt-1 text-xl font-black text-slate-900">{selectedSeats.length} ghế</div></div><button type="button" onClick={onClear} className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600">Bỏ chọn</button></div><div className="max-h-24 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-6 text-slate-600">{selectedSeats.map((seat) => seat.seatCode).join(" · ")}</div><div><div className="mb-2 text-xs font-extrabold text-slate-600">Đổi trạng thái nhanh</div><div className="grid grid-cols-3 gap-2">{SEAT_STATUSES.map((status) => <button type="button" key={status} onClick={() => onQuickStatus(status)} disabled={saving} className={`rounded-lg border px-2 py-2 text-[11px] font-extrabold transition ${SEAT_STATUS_CONFIG[status].background} ${SEAT_STATUS_CONFIG[status].border} ${SEAT_STATUS_CONFIG[status].color} hover:brightness-95 disabled:opacity-50`}>{SEAT_STATUS_CONFIG[status].label}</button>)}</div></div><Field label="Đổi loại ghế"><select value={bulkType} onChange={(event) => setBulkType(event.target.value as SeatType | "")} className={INPUT_CLASS}><option value="">Không thay đổi</option>{SEAT_TYPES.map((type) => <option key={type} value={type}>{SEAT_TYPE_CONFIG[type].label}</option>)}</select>{bulkType === "COUPLE" && <p className="mt-2 text-xs leading-5 text-pink-700">Ghế đôi chỉ nằm ở hàng cuối ({couplePlacementRow || "chưa xác định"}) và phải chọn đủ từng cặp liền kề.</p>}</Field><Field label="Đổi trạng thái"><select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value as SeatStatus | "")} className={INPUT_CLASS}><option value="">Không thay đổi</option>{SEAT_STATUSES.map((status) => <option key={status} value={status}>{SEAT_STATUS_CONFIG[status].label}</option>)}</select></Field>{error && <InlineError message={error} />}<button type="submit" disabled={saving || (!bulkType && !bulkStatus)} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-extrabold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{saving && <Loader2 size={15} className="animate-spin" />} Áp dụng cho {selectedSeats.length} ghế</button></form>; }
+function InlineError({ message }: { message: string }) { return <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs leading-5 text-rose-700"><CircleHelp size={15} className="mt-0.5 shrink-0" />{message}</div>; }
+function SeatLayoutWizard({ room, saving, error, onClose, onSubmit }: { room: CinemaRoom; saving: boolean; error: string; onClose: () => void; onSubmit: (request: SeatLayoutRequest) => void }) { const [form, setForm] = useState<SeatLayoutRequest>({ seatQuantity: room.seatQuantity || 50, seatsPerRow: room.seatsPerRow || 10, vipRowsFromBack: 2, coupleSeatsOnLastRow: 0, accessibleSeatsOnFirstRow: 2 }); const rowCount = Math.ceil(form.seatQuantity / Math.max(1, form.seatsPerRow)); const lastRowCapacity = form.seatQuantity - ((rowCount - 1) * form.seatsPerRow); const coupleCount = form.coupleSeatsOnLastRow || 0; const invalidCouple = coupleCount % 2 !== 0 || coupleCount > lastRowCapacity; const invalid = !Number.isInteger(form.seatQuantity) || !Number.isInteger(form.seatsPerRow) || form.seatQuantity < 50 || form.seatQuantity > 200 || form.seatsPerRow < 5 || form.seatsPerRow > 20 || invalidCouple || (form.vipRowsFromBack || 0) > rowCount || (form.accessibleSeatsOnFirstRow || 0) > Math.min(form.seatsPerRow, form.seatQuantity); const setNumber = (key: keyof SeatLayoutRequest, value: string) => { const parsed = Number(value); setForm((previous) => ({ ...previous, [key]: Number.isFinite(parsed) ? parsed : 0 })); }; return <ModalShell onClose={onClose} width="max-w-xl"><div className="border-b border-slate-100 bg-gradient-to-r from-violet-50 to-white px-6 py-5"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.13em] text-violet-600"><Sparkles size={15} /> Mẫu bố trí nhanh</div><h2 className="mt-2 text-xl font-black text-slate-950">Tạo lại sơ đồ {room.cinemaRoomName}</h2><p className="mt-1 text-sm leading-6 text-slate-500">Dùng cho phòng chưa phát hành suất chiếu. Ghế sẽ được xếp lại theo thứ tự hàng.</p></div><CloseButton onClick={onClose} /></div></div><form onSubmit={(event) => { event.preventDefault(); if (!invalid) onSubmit(form); }} className="space-y-5 px-6 py-6"><div className="grid gap-4 sm:grid-cols-2"><Field label="Tổng số ghế"><input type="number" min={50} max={200} value={form.seatQuantity} onChange={(event) => setNumber("seatQuantity", event.target.value)} className={INPUT_CLASS} /></Field><Field label="Ghế mỗi hàng"><input type="number" min={5} max={20} value={form.seatsPerRow} onChange={(event) => setNumber("seatsPerRow", event.target.value)} className={INPUT_CLASS} /></Field><Field label="Hàng VIP từ phía sau"><input type="number" min={0} max={5} value={form.vipRowsFromBack || 0} onChange={(event) => setNumber("vipRowsFromBack", event.target.value)} className={INPUT_CLASS} /></Field><Field label="Ghế đôi ở hàng cuối"><input type="number" min={0} max={12} step={2} value={form.coupleSeatsOnLastRow || 0} onChange={(event) => setNumber("coupleSeatsOnLastRow", event.target.value)} className={INPUT_CLASS} /></Field><Field label="Ghế hỗ trợ ở hàng đầu"><input type="number" min={0} max={6} value={form.accessibleSeatsOnFirstRow || 0} onChange={(event) => setNumber("accessibleSeatsOnFirstRow", event.target.value)} className={INPUT_CLASS} /></Field></div><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center justify-between text-sm"><span className="text-slate-500">Số hàng dự kiến</span><b className="text-slate-950">{rowCount}</b></div><div className="mt-2 flex items-center justify-between text-sm"><span className="text-slate-500">Sức chứa hàng cuối</span><b className="text-slate-950">{lastRowCapacity}</b></div><div className="mt-2 flex items-center justify-between text-sm"><span className="text-slate-500">Ghế đôi / hỗ trợ</span><b className="text-slate-950">{coupleCount} / {form.accessibleSeatsOnFirstRow || 0}</b></div></div>{invalid && <InlineError message={invalidCouple ? "Ghế đôi phải là số chẵn và không vượt quá sức chứa hàng cuối." : "Kiểm tra lại số lượng ghế, số ghế mỗi hàng hoặc số hàng phân loại."} />}{error && <InlineError message={error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-5"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600">Hủy</button><button type="submit" disabled={saving || invalid} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-extrabold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{saving && <Loader2 size={15} className="animate-spin" />} Áp dụng sơ đồ</button></div></form></ModalShell>; }
+function compareSeats(left: Seat, right: Seat) { return left.seatRow.localeCompare(right.seatRow, undefined, { numeric: true }) || left.seatNumber - right.seatNumber || left.seatId - right.seatId; }
+function isSeatInCurrentLayout(seat: Seat) { return seat.status !== "INACTIVE"; }
+function validateCoupleSelection(selectedSeats: Seat[], placementRow: string) { if (selectedSeats.some((seat) => !isSeatInCurrentLayout(seat))) return "Không thể chọn ghế vô hiệu để tạo ghế đôi."; const rows = new Map<string, Seat[]>(); selectedSeats.forEach((seat) => rows.set(seat.seatRow, [...(rows.get(seat.seatRow) || []), seat])); for (const [row, rowSeats] of rows) { if (placementRow && row !== placementRow) return `Ghế đôi chỉ được đặt ở hàng cuối (${placementRow}).`; const sorted = [...rowSeats].sort((left, right) => left.seatNumber - right.seatNumber); if (sorted.length % 2 !== 0) return `Hàng ${row} phải chọn số ghế chẵn.`; for (let index = 0; index < sorted.length; index += 2) if (sorted[index + 1].seatNumber !== sorted[index].seatNumber + 1) return `Ghế đôi phải liền kề trong hàng ${row}.`; } return ""; }
+function toSeatForm(seat: Seat): SeatUpdateRequest { return { cinemaRoomId: seat.cinemaRoomId, seatRow: seat.seatRow, seatNumber: seat.seatNumber, seatCode: seat.seatCode, type: seat.type, status: seat.status }; }
