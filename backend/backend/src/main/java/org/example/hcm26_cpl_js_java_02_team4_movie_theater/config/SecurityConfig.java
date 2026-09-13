@@ -109,6 +109,7 @@ public class SecurityConfig {
                                 "/contact/submit").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/auth/register/check",
+                                "/health",
                                 "/memberships/plans",
                                 "/bookings/tickets/**",
                                 "/payment/zalopay/return",
@@ -318,6 +319,7 @@ public class SecurityConfig {
                 || uri.startsWith("/memberships/plans")
                 || uri.startsWith("/swagger-ui")
                 || uri.startsWith("/v3/api-docs")
+                || uri.startsWith("/health")
                 || uri.startsWith("/ws");
     }
 

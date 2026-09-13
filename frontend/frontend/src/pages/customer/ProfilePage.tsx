@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { bookingApi, BookingResponse } from "@/api/bookingApi";
+import { paymentApi, type PaymentTransactionResponse } from "@/api/paymentApi";
 import { getApiErrorMessage } from "@/api/errors";
 import { userService, UpdateUserPayload, UserDetailResponse } from "@/api/userApi";
 import { Header } from "@/components/Header";
@@ -30,7 +31,7 @@ const tabs: { key: AccountTab; label: string; description: string; icon: typeof 
   { key: "membership-gifts", label: "Quà đã đổi", description: "QR và mã nhận quà", icon: PackageCheck },
   { key: "tickets", label: "Vé của tôi", description: "Xem chi tiết vé và ghế", icon: Ticket },
   { key: "transactions", label: "Lịch sử giao dịch", description: "Vé, chi tiêu, thanh toán", icon: WalletCards },
-  { key: "refunds", label: "Hoàn vé", description: "Yêu cầu và lịch sử hoàn", icon: RotateCcw },
+  { key: "refunds", label: "Vé đã hủy", description: "Lịch sử booking đã hủy", icon: RotateCcw },
   { key: "promotions", label: "Ưu đãi đã dùng", description: "Mã ưu đãi đã áp dụng", icon: Gift },
 ];
 
@@ -50,6 +51,7 @@ export default function ProfilePage() {
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
+  const [paymentTransactions, setPaymentTransactions] = useState<PaymentTransactionResponse[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [formData, setFormData] = useState<UpdateUserPayload>({});
 
@@ -104,6 +106,19 @@ export default function ProfilePage() {
     }
   }, []);
 
+  const fetchPaymentTransactions = useCallback(async () => {
+    try {
+      const data = await paymentApi.getMyTransactions();
+      setPaymentTransactions(data || []);
+    } catch (error) {
+      console.error("Failed to fetch payment transactions", error);
+    }
+  }, []);
+
+  const refreshActivity = useCallback(async () => {
+    await Promise.all([fetchBookings(), fetchPaymentTransactions()]);
+  }, [fetchBookings, fetchPaymentTransactions]);
+
   const fetchProfile = useCallback(async () => {
     try {
       const data = await userService.getMyProfile();
@@ -131,10 +146,11 @@ export default function ProfilePage() {
     const frameId = window.requestAnimationFrame(() => {
       void fetchProfile();
       void fetchBookings();
+      void fetchPaymentTransactions();
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [fetchBookings, fetchProfile]);
+  }, [fetchBookings, fetchPaymentTransactions, fetchProfile]);
 
   useEffect(() => {
     const nextParams = new URLSearchParams();
@@ -229,7 +245,7 @@ export default function ProfilePage() {
                 <p className="mt-1 text-sm text-slate-500">{profile?.email}</p>
                 {profile?.member && (
                   <span className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">
-                    Thành viên MagiCinema
+                    Thành viên Magi Cinema
                   </span>
                 )}
               </div>
@@ -293,9 +309,10 @@ export default function ProfilePage() {
             ) : (
               <AccountActivity
                 bookings={bookings}
+                paymentTransactions={paymentTransactions}
                 isLoading={loadingBookings}
                 initialTab={activeTab === "membership" || activeTab === "membership-gifts" ? "transactions" : activeTab}
-                onRefresh={fetchBookings}
+                onRefresh={refreshActivity}
               />
             )}
           </section>

@@ -1283,7 +1283,7 @@ export function StaffTicketSalesPage() {
             <article className="cinema-print-ticket overflow-hidden rounded-2xl bg-white text-left shadow-xl">
               <div className="ticket-brand flex items-center justify-between bg-gradient-to-r from-red-700 to-red-500 px-6 py-4 text-white">
                 <div>
-                  <p className="text-2xl font-black tracking-tight">MAGICINEMA</p>
+                  <p className="text-2xl font-black tracking-tight">MAGI CINEMA</p>
                   <p className="text-[10px] font-bold uppercase tracking-[.24em] text-red-100">Vé xem phim</p>
                 </div>
                 <Film size={34} />
@@ -1356,7 +1356,7 @@ export function StaffTicketSalesPage() {
               <article className="cinema-print-ticket concession-print-ticket overflow-hidden rounded-2xl bg-white text-left shadow-xl">
                 <div className="ticket-brand flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 text-white">
                   <div>
-                    <p className="text-2xl font-black tracking-tight">MAGICINEMA</p>
+                    <p className="text-2xl font-black tracking-tight">MAGI CINEMA</p>
                     <p className="text-[10px] font-bold uppercase tracking-[.24em] text-amber-50">Phiếu nhận bắp nước</p>
                   </div>
                   <Popcorn size={34} />

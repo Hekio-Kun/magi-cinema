@@ -48,17 +48,17 @@ Pageable pageable = PageRequests.bounded(page, size, sort);
 
 Endpoint users/contacts cần paged contract mới để tránh đổi API cũ đột ngột.
 
-## 🟡 Medium — callback payment và idempotency
+## 🟡 Medium — callback payment và idempotency (đã triển khai)
 
 **File**: `service/PaymentService.java` dòng 39–132, 143–210; `ZaloPayPaymentService.java`; `MomoPaymentService.java`.
 
-Signature HMAC đã được kiểm tra trước khi xử lý và so sánh constant-time; booking ownership/amount được kiểm tra ở service. Log callback đã không còn ghi toàn payload/chữ ký. Không có bằng chứng tĩnh để kết luận forge callback hiện tại.
+Signature HMAC đã được kiểm tra trước khi xử lý và so sánh constant-time; booking ownership/amount được kiểm tra ở service. Log callback đã không còn ghi toàn payload/chữ ký. `PaymentTransactionService` hiện lưu ledger MoMo/ZaloPay, khóa pessimistic transaction và booking, kiểm tra số tiền/mã giao dịch và xử lý callback lặp mà không xác nhận booking lần hai.
 
-**Đề xuất**: thêm khóa idempotency/provider transaction vào bảng booking/payment, unique constraint và test callback lặp hoặc callback đồng thời với cancel. Không tin amount từ redirect khi query provider thất bại nếu gateway contract yêu cầu query bắt buộc.
+Đã thêm unique constraint cho mã lệnh và mã giao dịch từ cổng, cùng test callback lặp, callback sai số tiền và callback thất bại. Chính sách dự án không có hoàn tiền vé; callback thất bại chỉ giải phóng booking đang giữ. Chưa chạy callback qua sandbox thật.
 
 ```java
-@Column(nullable = false, unique = true)
-private String providerTransactionId;
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+Optional<PaymentTransaction> findForUpdate(PaymentMethod method, String reference);
 ```
 
 ## 🟡 Medium — N+1, eager và god classes
@@ -87,4 +87,4 @@ Tách planner thành `PlannerRequestValidator`, `PlannerCapacityCalculator`, `Pl
 
 ## Regression tests
 
-`BookingDomainAuditTest` có 6 test overflow, refresh stock và hoàn kho; `DomainPaginationTest` có 4 test bounds; `SeatSelectionServiceTest` có test stale seat. Lần chạy Maven Java 21 cuối: **137 tests pass, 0 failure/error**, loại test context cần PostgreSQL thật.
+`BookingDomainAuditTest` có 6 test overflow, refresh stock và hoàn kho; `DomainPaginationTest` có 4 test bounds; `SeatSelectionServiceTest` có test stale seat; nhóm payment có test ledger và callback idempotency. Lần chạy Maven Java 21 cuối: **158 tests pass, 0 failure/error**, loại test context cần PostgreSQL thật.

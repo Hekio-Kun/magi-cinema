@@ -1,9 +1,9 @@
-# Movie Theater Management System — Frontend
+# Magi Cinema — Frontend
 
 Frontend dùng React, TypeScript và Vite. Mã nguồn Vite nằm trong thư mục `frontend` bên trong repository frontend:
 
 ```text
-movie-theater-management-system/
+magi-cinema/frontend/
 └── frontend/             # repository frontend
     ├── README.md
     └── frontend/         # ứng dụng Vite, có package.json
@@ -39,7 +39,7 @@ Nếu đang đứng tại repository frontend, đi vào thư mục ứng dụng:
 cd frontend
 ```
 
-Nếu đang đứng tại thư mục tổng `movie-theater-management-system`, đường dẫn tương ứng là:
+Nếu đang đứng tại thư mục tổng `magi-cinema`, đường dẫn tương ứng là:
 
 ```bash
 cd frontend/frontend
@@ -118,8 +118,8 @@ npm run preview
 Từ thư mục chứa `Dockerfile`:
 
 ```bash
-docker build --build-arg VITE_API_URL=https://api.example.com -t movie-theater-frontend .
-docker run --rm -p 3000:80 movie-theater-frontend
+docker build --build-arg VITE_API_URL=https://api.example.com -t magi-cinema-frontend .
+docker run --rm -p 3000:80 magi-cinema-frontend
 ```
 
 Docker dùng Node `22-alpine`, `npm ci`, `npm run typecheck` và `npm run build` trước khi tạo image. Chạy lint riêng trước khi build Docker.

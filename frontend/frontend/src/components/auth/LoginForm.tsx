@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Eye, EyeOff, Film, User, Lock } from "lucide-react";
+import { Eye, EyeOff, User, Lock } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authService } from "@/api/authApi";
 import { userService } from "@/api/userApi";
 import { getTokenRoles } from "@/utils/index";
 import { canAccessDashboardFromScopes } from "@/utils/dashboardAccess";
 import { getAuthToken, notifyAuthChange, setAuthToken } from "@/utils/authSession";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface LoginFormProps {
   onSwitch: () => void;
@@ -274,19 +275,7 @@ export function LoginForm({ onSwitch, onForgotPassword }: LoginFormProps) {
     >
       {/* Logo — matches Header.tsx */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
-        <div
-          style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: "linear-gradient(135deg, #4B5563, #374151)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(75,85,99,0.3)",
-          }}
-        >
-          <Film size={18} color="white" />
-        </div>
-        <span style={{ fontSize: "1.1rem", fontWeight: 800, color: TEXT_PRIMARY, letterSpacing: "-0.01em" }}>
-          Magi<span style={{ color: ACCENT_SLATE }}>Cinema</span>
-        </span>
+        <BrandLogo size="md" />
       </div>
 
       {/* Heading */}

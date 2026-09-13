@@ -27,6 +27,23 @@ export interface MomoPaymentResponse {
   message?: string | null;
 }
 
+export type PaymentTransactionStatus = 'INITIATED' | 'SUCCESS' | 'FAILED' | 'INVALID' | 'DUPLICATE';
+
+export interface PaymentTransactionResponse {
+  paymentTransactionId: number;
+  bookingId: number;
+  movieTitle?: string | null;
+  paymentMethod: 'MOMO' | 'ZALOPAY';
+  providerReference: string;
+  providerTransactionId?: string | null;
+  expectedAmount: number;
+  receivedAmount?: number | null;
+  status: PaymentTransactionStatus;
+  lastCallbackMessage?: string | null;
+  createdAt?: string | null;
+  callbackReceivedAt?: string | null;
+}
+
 export const paymentApi = {
   createZaloPayOrder: async (bookingId: number) => {
     const res = await apiClient.post(`/payment/zalopay/orders/${bookingId}`);
@@ -36,6 +53,11 @@ export const paymentApi = {
   createMomoOrder: async (bookingId: number) => {
     const res = await apiClient.post(`/payment/momo/orders/${bookingId}`);
     return res.data.result as MomoPaymentResponse;
+  },
+
+  getMyTransactions: async () => {
+    const res = await apiClient.get('/payment/transactions/my');
+    return res.data.result as PaymentTransactionResponse[];
   },
 
   createQrCodeUrl: async (content: string) => {

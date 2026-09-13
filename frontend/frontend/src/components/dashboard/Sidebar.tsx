@@ -114,7 +114,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
         </div>
         <div>
           <div style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em" }}>
-            Magi<span style={{ color: "#9CA3AF" }}>Cinema</span>
+            Magi <span style={{ color: "#9CA3AF" }}>Cinema</span>
           </div>
           <div style={{ color: "#8A8A9A", fontSize: 11 }}>Hệ thống quản lý</div>
         </div>

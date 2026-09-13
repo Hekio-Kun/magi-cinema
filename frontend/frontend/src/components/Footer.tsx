@@ -3,6 +3,7 @@ import { Film, Send, MapPin, Phone, Mail, X, Award, HeartHandshake, Shield, File
 import { FaInstagram, FaXTwitter, FaYoutube, FaFacebookF } from "react-icons/fa6";
 import { Link } from "react-router-dom";
 import { CustomerContactModal } from "@/components/common/CustomerContactModal";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface InfoModalData {
   title: string;
@@ -12,15 +13,15 @@ interface InfoModalData {
 
 const INFO_MODALS: Record<string, InfoModalData> = {
   "about": {
-    title: "Về MagiCinema",
+    title: "Về Magi Cinema",
     icon: <Film className="text-gray-800" size={24} />,
     content: (
       <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
         <p className="font-semibold text-gray-900 text-base">
-          MagiCinema — Nơi hội tụ tinh hoa điện ảnh và công nghệ trình chiếu hiện đại hàng đầu Việt Nam.
+          Magi Cinema — Nơi hội tụ tinh hoa điện ảnh và công nghệ trình chiếu hiện đại hàng đầu Việt Nam.
         </p>
         <p>
-          Được thành lập từ niềm đam mê bất tận với bộ môn nghệ thuật thứ bảy, MagiCinema cam kết mang đến không gian nghe nhìn đạt chuẩn quốc tế với phòng chiếu IMAX Laser, công nghệ âm thanh Dolby Atmos 360°, và hệ thống ghế ngả sang trọng hạng VIP/Couple.
+          Được thành lập từ niềm đam mê bất tận với bộ môn nghệ thuật thứ bảy, Magi Cinema cam kết mang đến không gian nghe nhìn đạt chuẩn quốc tế với phòng chiếu IMAX Laser, công nghệ âm thanh Dolby Atmos 360°, và hệ thống ghế ngả sang trọng hạng VIP/Couple.
         </p>
         <p>
           Với tầm nhìn trở thành biểu tượng mới cho lối sống giải trí thời thượng, chúng tôi không chỉ là nơi chiếu phim mà còn là không gian giao lưu văn hóa, tổ chức các buổi sự kiện ra mắt bom tấn thế giới.
@@ -39,7 +40,7 @@ const INFO_MODALS: Record<string, InfoModalData> = {
     content: (
       <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
         <p className="font-semibold text-gray-900 text-base">
-          Gia nhập đại gia đình MagiCinema — Phát triển đam mê điện ảnh trong môi trường trẻ trung và năng động!
+          Gia nhập đại gia đình Magi Cinema — Phát triển đam mê điện ảnh trong môi trường trẻ trung và năng động!
         </p>
         <p>
           Chúng tôi liên tục tìm kiếm những tài năng kiều diễm ở các vị trí: <span className="font-semibold text-gray-800">Nhân viên dịch vụ quầy rạp (Part-time/Full-time), Kỹ thuật viên vận hành máy chiếu IMAX, Chuyên viên phát triển phần mềm</span> và <span className="font-semibold text-gray-800">Quản lý rạp chiếu.</span>
@@ -56,7 +57,7 @@ const INFO_MODALS: Record<string, InfoModalData> = {
     content: (
       <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
         <p className="font-semibold text-gray-900 text-base">
-          Trung tâm thông tin truyền thông & Quan hệ công chúng MagiCinema.
+          Trung tâm thông tin truyền thông & Quan hệ công chúng Magi Cinema.
         </p>
         <p>
           Các nhà báo, cơ quan truyền thông và nhà tài trợ có nhu cầu phỏng vấn độc quyền, hợp tác buổi họp báo (Premiere) hoặc nhận tài liệu họp báo chính thức, vui lòng liên hệ bộ phận truyền thông qua email <span className="font-mono text-gray-900 font-semibold">press@magicinema.vn</span>.
@@ -73,7 +74,7 @@ const INFO_MODALS: Record<string, InfoModalData> = {
           Cam kết bảo vệ dữ liệu và thông tin cá nhân khách hàng.
         </p>
         <p>
-          MagiCinema áp dụng các tiêu chuẩn mã hóa dữ liệu cao nhất (SSL/TLS 256-bit) trong mọi giao dịch trực tuyến qua ZaloPay, MoMo và Ngân hàng. Chúng tôi cam kết tuyệt đối không chia sẻ hay sử dụng dữ liệu lịch sử đặt vé, email cá nhân cho bất kỳ mục đích không liên quan nào khi chưa có sự đồng ý hợp pháp từ bạn.
+          Magi Cinema áp dụng các tiêu chuẩn mã hóa dữ liệu cao nhất (SSL/TLS 256-bit) trong mọi giao dịch trực tuyến qua ZaloPay, MoMo và Ngân hàng. Chúng tôi cam kết tuyệt đối không chia sẻ hay sử dụng dữ liệu lịch sử đặt vé, email cá nhân cho bất kỳ mục đích không liên quan nào khi chưa có sự đồng ý hợp pháp từ bạn.
         </p>
       </div>
     ),
@@ -84,7 +85,7 @@ const INFO_MODALS: Record<string, InfoModalData> = {
     content: (
       <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
         <p className="font-semibold text-gray-900 text-base">
-          Quy định chung khi sử dụng dịch vụ tại cụm rạp MagiCinema.
+          Quy định chung khi sử dụng dịch vụ tại cụm rạp Magi Cinema.
         </p>
         <ul className="list-disc pl-5 space-y-1 text-xs">
           <li>Vé đã mua trực tuyến không áp dụng chính sách hoàn hủy hay thay đổi (trừ trường hợp sự cố suất chiếu từ phía ban quản lý rạp).</li>
@@ -115,12 +116,7 @@ export function Footer() {
           {/* Brand & Social info */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2.5 mb-5 no-underline">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm" style={{ background: "linear-gradient(135deg,#4B5563,#111827)" }}>
-                <Film size={20} color="#fff" />
-              </div>
-              <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.02em" }}>
-                Magi<span style={{ color: "#4B5563" }}>Cinema</span>
-              </span>
+              <BrandLogo size="lg" />
             </Link>
             <p style={{ color: "#6B7280", fontSize: "0.875rem", lineHeight: 1.7, maxWidth: 300, marginBottom: 20 }}>
               Nghệ thuật điện ảnh thăng hoa. Suất chiếu cao cấp, dịch vụ chu đáo và trải nghiệm trọn vẹn trong từng giây phút.
@@ -209,7 +205,7 @@ export function Footer() {
             <ul className="flex flex-col gap-3">
               <li>
                 <button onClick={() => setActiveInfoModal("about")} className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium text-left bg-transparent border-none p-0 cursor-pointer">
-                  Về MagiCinema
+                  Về Magi Cinema
                 </button>
               </li>
               <li>
@@ -233,7 +229,7 @@ export function Footer() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
               <h4 className="text-lg font-bold text-gray-900 mb-1">
-                Luôn cập nhật cùng MagiCinema.
+                Luôn cập nhật cùng Magi Cinema.
               </h4>
               <p style={{ color: "#6B7280", fontSize: "0.875rem" }}>
                 Đăng ký nhận bản tin để cập nhật phim mới, suất chiếu đặc biệt và ưu đãi quà tặng dành cho hội viên.
@@ -259,7 +255,7 @@ export function Footer() {
 
         {/* Bottom copyright & policies bar */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 border-t border-gray-200 text-xs text-gray-500 font-medium">
-          <p>© 2026 MagiCinema. Bảo lưu mọi quyền lộc tự & Chương trình.</p>
+          <p>© 2026 Magi Cinema. Bảo lưu mọi quyền lộc tự & Chương trình.</p>
           <div className="flex flex-wrap items-center justify-center gap-6">
             <button onClick={() => setActiveInfoModal("privacy")} className="text-gray-500 hover:text-gray-900 transition-colors bg-transparent border-none p-0 cursor-pointer">
               Chính sách bảo mật

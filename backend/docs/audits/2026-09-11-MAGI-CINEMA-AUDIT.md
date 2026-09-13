@@ -18,6 +18,7 @@ Báo cáo chi tiết:
 |---|---|
 | [Auth và bảo mật](2026-09-11-auth-security.md) | OTP, validation, password reset, JWT/RBAC, uploads, các nhận định bị bác bỏ |
 | [Booking và nghiệp vụ backend](2026-09-11-booking-domain.md) | Tràn số, khóa booking/ghế/kho, callback, pagination, queries/index, đề xuất tách service |
+| [Sổ giao dịch thanh toán](2026-09-13-payment-ledger.md) | Ledger MoMo/ZaloPay, kiểm tra số tiền, khóa callback và chống callback trùng; không có hoàn tiền vé |
 | [Frontend](2026-09-11-frontend.md) | Lỗi runtime/TypeScript, auth event, payment URL, stale requests, effect cleanup, component hierarchy |
 | [Hạ tầng và kiến trúc](2026-09-11-infrastructure-architecture.md) | Seeder quyền, Docker/Nginx/env, callback URL, migration, caching, API versioning, logging, testing |
 
@@ -36,6 +37,7 @@ Báo cáo chi tiết:
 - Quyền/mô tả STAFF và MANAGER đã chỉnh bị seed ghi đè sau restart.
 - API phân trang phòng/ghế/suất-ghế không có trần kích thước hoặc guard page/size; sửa cùng metadata, giữ đủ số lượng caller sơ đồ ghế hiện tại.
 - Log callback thanh toán toàn payload/chữ ký; đã bỏ payload khỏi log.
+- MoMo/ZaloPay đã có ledger giao dịch, kiểm tra mã/số tiền và callback idempotency; callback trùng không xác nhận booking lần hai. Chính sách hiện tại không có hoàn tiền vé.
 - Frontend có symbol/hàm không tồn tại, phân biệt response ví bằng trường optional, lỗi helper khi error là null và request cũ ghi đè dữ liệu mới.
 - Docker không dùng API build arg; Nginx thiếu REST/WebSocket proxy; Compose phụ sai đường dẫn/thiếu env; callback fallback sai prefix; biến Google integration trong env mẫu chưa được nối vào Spring.
 
@@ -56,7 +58,7 @@ Báo cáo chi tiết:
 | SQL injection | Repositories dùng query parameters/Criteria. SQL nối chuỗi migration nhận tên bảng hằng và escape constraint; chưa thấy luồng nối user input vào SQL. |
 | SecurityConfig / auth/me | Đối chiếu permitAll với chức năng public/callback và signature. auth/me trả claims của chính caller, signer key không có trong JWT; không gọi đó là lộ signer key. |
 | Pagination | Movie/booking đã có trần; các API ghế/phòng đã thêm bounds. Contact/users và một số list khác cần paged contract mới. |
-| Callback MoMo/ZaloPay | Có HMAC và so sánh chữ ký; không kết luận forge callback chỉ vì permitAll. Test signature/idempotency tích hợp còn cần bổ sung. |
+| Callback MoMo/ZaloPay | Có HMAC và so sánh chữ ký; ledger khóa transaction/booking, kiểm tra số tiền và chống callback trùng. Chưa chạy callback qua sandbox thật. |
 | XSS / JWT localStorage | Không tìm thấy dangerouslySetInnerHTML/innerHTML/eval trong quét source. localStorage vẫn có rủi ro token theft nếu XSS xảy ra; chuyển cookie cần CSRF và kế hoạch tương thích. |
 | Auth events | setAuthToken đã phát auth-change. LoginForm trước đó vốn đã notify riêng sau tải profile nên không đúng khi nói login luôn không cập nhật. |
 | Effects/timers/WebSocket | Kiểm tra cleanup và stale response trên luồng chính; sửa guard ở các list/modal; không đánh đồng setState sau unmount với memory leak chắc chắn. |
@@ -82,7 +84,7 @@ Hai lưu ý kỹ thuật tránh false positive:
 
 ## Kiểm tra và giới hạn
 
-Kết quả cuối cùng được ghi ở [biên bản kiểm tra](2026-09-11-validation.md).
+Kết quả audit ban đầu được ghi ở [biên bản kiểm tra](2026-09-11-validation.md); phần ledger được xác thực bổ sung trong [biên bản chức năng 1](2026-09-13-payment-ledger.md).
 
 - Kiểm tra unit backend với JDK 21, không chạy `contextLoads` dùng cấu hình PostgreSQL thật.
 - Lint, typecheck và production build frontend, kèm regression checks cho helper đã sửa.

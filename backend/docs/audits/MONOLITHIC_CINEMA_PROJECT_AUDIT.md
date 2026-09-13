@@ -2,7 +2,7 @@
 
 Audit date: 2026-07-16
 Auditor role: Senior Software Architect, Senior QA/Automation Engineer, Security Reviewer, Database Reviewer, Cinema Domain Analyst
-Project: Movie Theater Management System / CinePrime
+Project: Magi Cinema
 Architecture scope: monolithic Spring Boot backend with React/Vite frontend
 
 This report follows `docs/architecture/test.md`. Production code was not modified. No commits, push, reset, database reset, real email, or real payment calls were performed.

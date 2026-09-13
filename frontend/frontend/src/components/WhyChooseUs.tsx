@@ -99,7 +99,7 @@ export function WhyChooseUs() {
           className="text-center mb-16"
           style={{ opacity: headerVisible ? 1 : 0, transform: headerVisible ? "translateY(0)" : "translateY(28px)", transition: "all 0.6s ease" }}
         >
-          <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#8B949E", letterSpacing: "0.18em", marginBottom: 8 }}>Tại sao chọn MagiCinema</p>
+          <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#8B949E", letterSpacing: "0.18em", marginBottom: 8 }}>Tại sao chọn Magi Cinema</p>
           <h2 style={{ fontSize: "clamp(1.6rem,3.5vw,2.4rem)", fontWeight: 800, color: "#111827", letterSpacing: "-0.025em" }}>Tại sao chọn chúng tôi</h2>
           <p style={{ color: "#6B7280", fontSize: "1rem", marginTop: 10, maxWidth: 460, margin: "10px auto 0" }}>
             Được thiết kế dành riêng cho bạn — mọi chi tiết được chăm chút để chuyến đi xem phim trở nên dễ dàng và khó quên.
@@ -127,7 +127,7 @@ export function WhyChooseUs() {
                 Ready for the ultimate<br />trải nghiệm điện ảnh?
               </h3>
               <p style={{ color: "#6B7280", fontSize: "0.95rem", maxWidth: 400 }}>
-                Tham gia cùng hơn 50.000 người yêu phim chọn MagiCinema cho mọi suất chiếu.
+                Tham gia cùng hơn 50.000 người yêu phim chọn Magi Cinema cho mọi suất chiếu.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 flex-shrink-0">

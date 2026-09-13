@@ -1,4 +1,4 @@
-# 🎬 Magi Cinema — Movie Theater Management System
+# 🎬 Magi Cinema — Cinema Management System
 
 Hệ thống Quản lý và Đặt vé Rạp Chiếu Phim Hiện Đại (Full-stack Spring Boot & React Vite).
 

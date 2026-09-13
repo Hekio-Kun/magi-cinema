@@ -6,6 +6,7 @@ import { movieService, type MovieResponse } from "@/api/movieApi";
 import { canAccessDashboardFromScopes } from "@/utils/dashboardAccess";
 import { clearAuthToken } from "@/utils/authSession";
 import { CustomerContactModal } from "@/components/common/CustomerContactModal";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useAuthToken } from "@/hooks/useAuthToken";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
@@ -289,13 +290,7 @@ function HeaderContent({ pathname }: { pathname: string }) {
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5 group" style={{ textDecoration: "none", flexShrink: 0 }}>
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:rotate-3"
-            style={{ background: "linear-gradient(135deg, #4B5563, #374151)", boxShadow: "0 4px 12px rgba(75,85,99,0.3)" }}>
-            <Film size={18} color="#fff" />
-          </div>
-          <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
-            Magi<span style={{ color: "#4B5563" }}>Cinema</span>
-          </span>
+          <BrandLogo size="md" className="transition-transform duration-300 group-hover:scale-[1.03]" />
         </Link>
 
         {/* Desktop Nav with underline hover animation */}

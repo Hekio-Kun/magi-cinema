@@ -1,7 +1,7 @@
 import * as React from "react"
-import { Film } from "lucide-react"
+import { BrandLogo } from "@/components/BrandLogo"
 
-const THEATER_NAME = "MagiCinema"
+const THEATER_NAME = "Magi Cinema"
 
 function AuthShell({
   title,
@@ -16,15 +16,7 @@ function AuthShell({
     <div className="w-full max-w-md">
       <div className="mb-8 flex flex-col items-center text-center">
         <div className="mb-5 flex items-center gap-2.5">
-          <span
-            className="flex size-10 items-center justify-center rounded-xl text-white shadow-lg"
-            style={{ background: "linear-gradient(135deg, #4B5563, #374151)", boxShadow: "0 4px 12px rgba(75,85,99,0.3)" }}
-          >
-            <Film className="size-5" />
-          </span>
-          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
-            Magi<span style={{ color: "#4B5563" }}>Cinema</span>
-          </span>
+          <BrandLogo size="md" />
         </div>
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
           {title}

@@ -81,7 +81,7 @@ export function MembershipProfile() {
   if (!mine) return (
     <section className="rounded-2xl border bg-white p-8 text-center shadow-sm">
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-amber-100 text-amber-700"><Crown size={34} /></span>
-      <h2 className="mt-5 text-2xl font-black">Tham gia MagiCinema Membership</h2>
+      <h2 className="mt-5 text-2xl font-black">Tham gia Magi Cinema Membership</h2>
       <p className="mx-auto mt-2 max-w-xl text-sm text-slate-500">Đăng ký hoàn toàn miễn phí. Chi tiêu vé và bắp nước sẽ được tích điểm, đồng thời giúp bạn tự động lên hạng VIP hoặc VVIP.</p>
       <p className="mx-auto mt-5 max-w-lg rounded-xl bg-slate-50 p-4 text-left text-sm text-slate-600">Điều kiện: hồ sơ có họ tên, ngày sinh, số điện thoại duy nhất và khách hàng đủ 12 tuổi. Khi đăng ký, bạn đồng ý với điều khoản chương trình hội viên.</p>
       <button disabled={enrolling} onClick={() => void enroll()} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-rose-600 px-6 py-3 font-extrabold text-white disabled:opacity-60">{enrolling && <Loader2 size={17} className="animate-spin" />} Đăng ký miễn phí</button>
@@ -96,7 +96,7 @@ export function MembershipProfile() {
   return <div className="space-y-6">
     <section className={`overflow-hidden rounded-2xl bg-gradient-to-r ${tierStyle[mine.planCode] || tierStyle.MEMBER} p-6 text-white shadow-lg`}>
       <div className="flex flex-wrap items-start justify-between gap-5">
-        <div><p className="text-xs font-bold uppercase tracking-[.2em] text-white/70">MagiCinema Membership</p><h2 className="mt-2 flex items-center gap-2 text-3xl font-black"><Crown /> {mine.planName}</h2><p className="mt-2 text-sm text-white/70">Mã hội viên: {mine.memberCode}</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-[.2em] text-white/70">Magi Cinema Membership</p><h2 className="mt-2 flex items-center gap-2 text-3xl font-black"><Crown /> {mine.planName}</h2><p className="mt-2 text-sm text-white/70">Mã hội viên: {mine.memberCode}</p></div>
         <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold"><BadgeCheck size={15} /> Đang hoạt động</span>
       </div>
       <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -50,7 +50,7 @@ const INVOICES = [
     customerColor: "#dc2626",
     employee: "Sarah Chen",
     amount: "$540",
-    status: "Refunded",
+    status: "Cancelled",
     type: "2D Standard",
   },
   {
@@ -76,7 +76,7 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; dot: string }> 
     color: "#d97706",
     dot: "#f59e0b",
   },
-  Refunded: {
+  Cancelled: {
     bg: "rgba(239,68,68,0.1)",
     color: "#dc2626",
     dot: "#ef4444",

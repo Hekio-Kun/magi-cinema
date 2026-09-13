@@ -25,29 +25,48 @@ test('unknown API errors keep the fallback, including null and generic server me
 
 test('token writes notify same-tab subscribers after storage and unsubscribe removes listeners', () => {
   const values = new Map();
+  const tokenA = 'eyJhbGciOiJub25lIn0.eyJleHAiOjQxMDI0NDQ4MDB9.signature-a';
+  const tokenB = 'eyJhbGciOiJub25lIn0.eyJleHAiOjQxMDI0NDQ4MDB9.signature-b';
   const window = new EventTarget();
   const localStorage = {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value),
     removeItem: (key) => values.delete(key),
   };
-  const auth = loadSource('utils/authSession.ts', { window, localStorage, Event });
+  const auth = loadSource('utils/authSession.ts', {
+    window,
+    localStorage,
+    Event,
+    atob,
+    require: (name) => {
+      assert.equal(name, './index');
+      return loadSource('utils/index.ts', { atob });
+    },
+  });
   const observed = [];
   const unsubscribe = auth.subscribeAuthChanges(() => observed.push(auth.getAuthToken()));
-  auth.setAuthToken('  token-A  ');
-  assert.deepEqual(observed, ['token-A']);
+  auth.setAuthToken(`  ${tokenA}  `);
+  assert.deepEqual(observed, [tokenA]);
   assert.throws(() => auth.setAuthToken('null'));
-  assert.equal(auth.getAuthToken(), 'token-A');
+  assert.equal(auth.getAuthToken(), tokenA);
   auth.clearAuthToken();
-  assert.deepEqual(observed, ['token-A', null]);
+  assert.deepEqual(observed, [tokenA, null]);
   unsubscribe();
-  auth.setAuthToken('token-B');
+  auth.setAuthToken(tokenB);
   assert.equal(observed.length, 2);
 });
 
 test('storage notifications synchronize other tabs and ignore unrelated keys', () => {
   const window = new EventTarget();
-  const auth = loadSource('utils/authSession.ts', { window, localStorage: { getItem: () => null }, Event });
+  const auth = loadSource('utils/authSession.ts', {
+    window,
+    localStorage: { getItem: () => null },
+    Event,
+    require: (name) => {
+      assert.equal(name, './index');
+      return loadSource('utils/index.ts', { atob });
+    },
+  });
   let calls = 0;
   const unsubscribe = auth.subscribeAuthChanges(() => { calls += 1; });
   for (const key of ['theme', 'jwt_token', null]) {

@@ -118,7 +118,7 @@ export function CustomerContactModal({ isOpen, onClose }: CustomerContactModalPr
               </div>
               <h4 className="text-lg font-bold text-white mb-2">🎉 Góp ý đã được gửi thành công!</h4>
               <p className="text-xs text-gray-300 max-w-md mx-auto leading-relaxed mb-6">
-                MagiCinema chân thành cảm ơn ý kiến đóng góp quý báu của bạn. Thông điệp đã được tiếp nhận và chuyển tới Ban quản lý rạp để xử lý và phản hồi trong thời gian sớm nhất.
+                Magi Cinema chân thành cảm ơn ý kiến đóng góp quý báu của bạn. Thông điệp đã được tiếp nhận và chuyển tới Ban quản lý rạp để xử lý và phản hồi trong thời gian sớm nhất.
               </p>
               <div className="p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl text-left max-w-sm mx-auto mb-6 text-xs text-gray-400">
                 <div className="flex justify-between pb-2 border-b border-gray-800 mb-2">

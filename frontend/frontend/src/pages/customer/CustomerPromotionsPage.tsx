@@ -57,7 +57,7 @@ export function CustomerPromotionsPage() {
             Kho Ưu Đãi Khổng Lồ
           </h1>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-            Khám phá hàng loạt mã giảm giá, voucher quà tặng đặc quyền và những chương trình khuyến mãi bùng nổ chỉ có tại MagiCinema.
+            Khám phá hàng loạt mã giảm giá, voucher quà tặng đặc quyền và những chương trình khuyến mãi bùng nổ chỉ có tại Magi Cinema.
           </p>
         </div>
 

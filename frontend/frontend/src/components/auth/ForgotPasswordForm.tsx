@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Film, Mail, ArrowLeft } from "lucide-react";
+import { Mail, ArrowLeft } from "lucide-react";
 import { authService } from "@/api/authApi";
 import { getApiErrorMessage } from "@/api/errors";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface ForgotPasswordFormProps {
   onBack: () => void;
@@ -53,19 +54,7 @@ export function ForgotPasswordForm({ onBack, onEmailSent }: ForgotPasswordFormPr
     >
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
-        <div
-          style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: "linear-gradient(135deg, #4B5563, #374151)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(75,85,99,0.3)",
-          }}
-        >
-          <Film size={18} color="white" />
-        </div>
-        <span style={{ fontSize: "1.1rem", fontWeight: 800, color: TEXT_PRIMARY, letterSpacing: "-0.01em" }}>
-          Magi<span style={{ color: ACCENT_SLATE }}>Cinema</span>
-        </span>
+        <BrandLogo size="md" />
       </div>
 
       {/* Heading */}

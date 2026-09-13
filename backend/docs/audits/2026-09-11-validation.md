@@ -1,16 +1,16 @@
-# Biên bản xác thực audit — 11/09/2026
+# Biên bản xác thực audit — 11/09/2026 (cập nhật 13/09/2026)
 
 ## Đã chạy
 
 Backend (JDK 21):
 
 ```text
-mvn test -Dtest=!Hcm26CplJsJava02Team4MovieTheaterApplicationTests
-Tests run: 137, Failures: 0, Errors: 0, Skipped: 0
+mvn -q test -Dtest=!Hcm26CplJsJava02Team4MovieTheaterApplicationTests
+158 tests, 0 failures, 0 errors
 BUILD SUCCESS
 ```
 
-Bao gồm test auth/OTP mới, giữ quyền seeder sau restart, overflow/stock/lock booking, pagination, seat stale state và test nghiệp vụ hiện có. `Hcm26CplJsJava02Team4MovieTheaterApplicationTests` bị loại vì `contextLoads` cần PostgreSQL và chạy migration/seed; chưa dùng database thật trong audit.
+Bao gồm test auth/OTP mới, giữ quyền seeder sau restart, overflow/stock/lock booking, pagination, seat stale state, callback thanh toán lặp/sai số tiền và test nghiệp vụ hiện có. `Hcm26CplJsJava02Team4MovieTheaterApplicationTests` bị loại vì `contextLoads` cần PostgreSQL và chạy migration/seed; chưa dùng database thật trong audit.
 
 Frontend:
 
@@ -18,8 +18,10 @@ Frontend:
 npm run typecheck   PASS
 npm run lint        PASS (0 errors, 0 warnings)
 npm run build       PASS (Vite 8.0.16)
-npm test -- --run   5 pass, 0 fail
+npm test            5 pass, 0 fail
 ```
+
+Phần ledger thanh toán được kiểm thử riêng trong `PaymentTransactionServiceTest` và `PaymentServiceCallbackTest`; cả 6 test đều pass trong lần chạy Maven trên.
 
 Infrastructure:
 

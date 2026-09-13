@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { bookingApi, BookingResponse } from "@/api/bookingApi";
+import type { PaymentTransactionResponse } from "@/api/paymentApi";
 import { formatPresentationLabelFromFields } from "@/utils/presentation";
 import { promotionApi, type PromotionUsage } from "@/api/promotionApi";
 
@@ -24,6 +25,7 @@ type ActivityTab = "tickets" | "transactions" | "refunds" | "promotions";
 
 interface AccountActivityProps {
   bookings: BookingResponse[];
+  paymentTransactions?: PaymentTransactionResponse[];
   isLoading: boolean;
   initialTab?: ActivityTab;
   onRefresh?: () => Promise<void> | void;
@@ -32,7 +34,7 @@ interface AccountActivityProps {
 const activityTabs: { key: ActivityTab; label: string; icon: typeof Ticket }[] = [
   { key: "tickets", label: "Lịch sử vé", icon: Ticket },
   { key: "transactions", label: "Chi tiêu", icon: WalletCards },
-  { key: "refunds", label: "Hoàn vé", icon: RotateCcw },
+  { key: "refunds", label: "Vé đã hủy", icon: RotateCcw },
   { key: "promotions", label: "Ưu đãi", icon: Gift },
 ];
 
@@ -76,6 +78,20 @@ const statusClass = (status: string) => {
   return "border-slate-200 bg-white text-slate-600";
 };
 
+const paymentStatusLabel: Record<string, string> = {
+  INITIATED: "Đang chờ cổng",
+  SUCCESS: "Đã ghi nhận",
+  FAILED: "Thất bại",
+  INVALID: "Không hợp lệ",
+  DUPLICATE: "Callback trùng",
+};
+
+const paymentStatusClass = (status: string) => {
+  if (status === "SUCCESS" || status === "DUPLICATE") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "INITIATED") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-rose-200 bg-rose-50 text-rose-700";
+};
+
 const getApiErrorMessage = (error: unknown, fallback: string) => {
   const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
   return typeof message === "string" && message.trim() ? message : fallback;
@@ -86,7 +102,7 @@ export function AccountActivity(props: AccountActivityProps) {
   return <AccountActivityContent key={initialTab} {...props} initialTab={initialTab} />;
 }
 
-function AccountActivityContent({ bookings, isLoading, initialTab = "tickets", onRefresh }: AccountActivityProps) {
+function AccountActivityContent({ bookings, paymentTransactions = [], isLoading, initialTab = "tickets", onRefresh }: AccountActivityProps) {
   const [activeTab, setActiveTab] = useState<ActivityTab>(initialTab);
   const [selectedBooking, setSelectedBooking] = useState<BookingResponse | null>(null);
   const [payingBookingId, setPayingBookingId] = useState<number | null>(null);
@@ -195,12 +211,13 @@ function AccountActivityContent({ bookings, isLoading, initialTab = "tickets", o
           monthlySpending={monthlySpending}
           total={spendingSummary.total}
           average={spendingSummary.average}
+          paymentTransactions={paymentTransactions}
           onView={setSelectedBooking}
         />
       )}
 
       {activeTab === "refunds" && (
-        <RefundHistory cancelledBookings={cancelledBookings} onView={setSelectedBooking} />
+        <CancelledBookingHistory cancelledBookings={cancelledBookings} onView={setSelectedBooking} />
       )}
 
       {activeTab === "promotions" && (
@@ -311,12 +328,14 @@ function TicketRow({
 
 function TransactionHistory({
   bookings,
+  paymentTransactions,
   monthlySpending,
   total,
   average,
   onView,
 }: {
   bookings: BookingResponse[];
+  paymentTransactions: PaymentTransactionResponse[];
   monthlySpending: { month: string; total: number }[];
   total: number;
   average: number;
@@ -344,6 +363,7 @@ function TransactionHistory({
         </div>
       </div>
 
+      <div className="space-y-5">
       <div className="rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-extrabold text-slate-900">Lịch sử giao dịch</div>
         {bookings.length === 0 ? (
@@ -377,11 +397,34 @@ function TransactionHistory({
           </div>
         )}
       </div>
+      {paymentTransactions.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-4 py-3 text-sm font-extrabold text-slate-900">Chi tiết giao dịch cổng thanh toán</div>
+          <div className="divide-y divide-slate-100">
+            {paymentTransactions.map((transaction) => (
+              <div key={transaction.paymentTransactionId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0">
+                  <div className="font-bold text-slate-950">#{transaction.bookingId} · {transaction.paymentMethod === "MOMO" ? "MoMo" : "ZaloPay"}</div>
+                  <div className="mt-1 truncate text-xs text-slate-500">Mã lệnh: {transaction.providerReference}{transaction.providerTransactionId ? ` · Mã cổng: ${transaction.providerTransactionId}` : ""}</div>
+                  <div className="mt-1 text-xs text-slate-400">{formatDateTime(transaction.callbackReceivedAt ?? transaction.createdAt ?? undefined)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-extrabold text-slate-950">{currency(transaction.receivedAmount ?? transaction.expectedAmount)}</div>
+                  <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${paymentStatusClass(transaction.status)}`}>
+                    {paymentStatusLabel[transaction.status] || transaction.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   );
 }
 
-function RefundHistory({
+function CancelledBookingHistory({
   cancelledBookings,
   onView,
 }: {
@@ -392,8 +435,8 @@ function RefundHistory({
     return (
       <EmptyState
         icon={<RotateCcw size={28} />}
-        title="Chưa có lịch sử hoàn vé"
-        description="Hiện hệ thống chưa ghi nhận yêu cầu hoàn vé nào từ tài khoản của bạn."
+        title="Chưa có booking đã hủy"
+        description="Hiện hệ thống chưa ghi nhận booking nào bị hủy từ tài khoản của bạn."
       />
     );
   }

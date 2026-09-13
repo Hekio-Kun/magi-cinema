@@ -12,8 +12,8 @@
     <groupId>org.example</groupId>
     <artifactId>HCM26_CPL_JS_JAVA_02_Team4_Movie_Theater</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>HCM26_CPL_JS_JAVA_02_Team4_Movie_Theater</name>
-    <description>HCM26_CPL_JS_JAVA_02_Team4_Movie_Theater</description>
+    <name>Magi Cinema Backend</name>
+    <description>Magi Cinema cinema management backend</description>
     <url/>
 
     <licenses>

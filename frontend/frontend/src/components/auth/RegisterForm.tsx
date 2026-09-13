@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Calendar, Eye, EyeOff, Film, Lock, Mail, Phone, User } from "lucide-react";
+import { Calendar, Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react";
 import { authService } from "@/api/authApi";
 import { getApiErrorMessage } from "@/api/errors";
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE, passwordRequirements } from "@/utils/passwordPolicy";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export type RegisterData = {
   username: string;
@@ -214,15 +215,12 @@ export function RegisterForm({ onSwitch, onRegistered }: RegisterFormProps) {
       boxShadow: "0 8px 40px rgba(0,0,0,0.07)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg, #4B5563, #374151)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Film size={17} color="white" />
-        </div>
-        <span style={{ fontSize: "1.05rem", fontWeight: 800, color: TEXT_PRIMARY }}>MagiCinema</span>
+        <BrandLogo size="sm" />
       </div>
 
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ color: TEXT_PRIMARY, fontSize: 22, fontWeight: 800, margin: 0 }}>Tạo tài khoản</h1>
-        <p style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 5 }}>Tham gia MagiCinema và bắt đầu xem phim ngay hôm nay</p>
+        <p style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 5 }}>Tham gia Magi Cinema và bắt đầu xem phim ngay hôm nay</p>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Film, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -8,6 +8,7 @@ import { OtpView } from "@/components/auth/otp-view";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { ForgotPasswordSent } from "@/components/auth/ForgotPasswordSent";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const CINEMA_BG =
   "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaW5lbWElMjB0aGVhdGVyJTIwZGFyayUyMGRyYW1hdGljJTIwaW50ZXJpb3J8ZW58MXx8fHwxNzgyMjE1Nzc2fDA&ixlib=rb-4.1.0&q=80&w=1080";
@@ -125,17 +126,7 @@ export function AuthFlow() {
           <div style={{ position: "relative", zIndex: 10, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "40px 44px" }}>
             {/* Logo — matches Header.tsx */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: "linear-gradient(135deg, #4B5563, #374151)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 4px 12px rgba(75,85,99,0.35)"
-              }}>
-                <Film size={18} color="white" />
-              </div>
-              <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
-                Magi<span style={{ color: "#4B5563" }}>Cinema</span>
-              </span>
+              <BrandLogo size="md" />
             </div>
 
             {/* Bottom text & stats — matches Hero.tsx style */}
@@ -270,17 +261,7 @@ export function AuthFlow() {
 
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center gap-2.5 mb-6 self-start" style={{ paddingLeft: 52 }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: 9,
-              background: "linear-gradient(135deg, #4B5563, #374151)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(75,85,99,0.3)"
-            }}>
-              <Film size={17} color="white" />
-            </div>
-            <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
-              Magi<span style={{ color: "#4B5563" }}>Cinema</span>
-            </span>
+            <BrandLogo size="md" />
           </div>
 
           {/* Form container */}

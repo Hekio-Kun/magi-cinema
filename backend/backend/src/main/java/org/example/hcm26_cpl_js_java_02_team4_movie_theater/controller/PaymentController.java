@@ -2,15 +2,20 @@ package org.example.hcm26_cpl_js_java_02_team4_movie_theater.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.PageResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.payment.MomoPaymentResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.payment.PaymentTransactionResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.payment.ZaloPayCallbackResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.payment.ZaloPayPaymentResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.PaymentService;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.PaymentTransactionService;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.QrCodeService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -19,6 +24,7 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final PaymentTransactionService paymentTransactionService;
     private final QrCodeService qrCodeService;
 
     @PostMapping("/zalopay/orders/{bookingId}")
@@ -32,6 +38,23 @@ public class PaymentController {
     public ApiResponse<MomoPaymentResponse> createMomoOrder(@PathVariable Long bookingId) {
         return ApiResponse.<MomoPaymentResponse>builder()
                 .result(paymentService.createMomoOrder(bookingId))
+                .build();
+    }
+
+    @GetMapping("/transactions/my")
+    public ApiResponse<List<PaymentTransactionResponse>> getMyTransactions() {
+        return ApiResponse.<List<PaymentTransactionResponse>>builder()
+                .result(paymentTransactionService.getMyTransactions())
+                .build();
+    }
+
+    @GetMapping("/transactions")
+    @PreAuthorize("hasAuthority('BOOKING_VIEW')")
+    public ApiResponse<PageResponse<PaymentTransactionResponse>> getAdminTransactions(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.<PageResponse<PaymentTransactionResponse>>builder()
+                .result(paymentTransactionService.getAdminTransactions(page, size))
                 .build();
     }
 

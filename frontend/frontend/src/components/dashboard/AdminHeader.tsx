@@ -120,7 +120,7 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
           {activePage}
         </div>
         <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 500 }}>
-          Hệ thống quản lý MagiCinema
+          Hệ thống quản lý Magi Cinema
         </div>
       </div>
 

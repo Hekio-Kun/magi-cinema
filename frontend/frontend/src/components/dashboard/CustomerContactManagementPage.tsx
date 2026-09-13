@@ -446,11 +446,11 @@ export function CustomerContactManagementPage() {
                   rows={6}
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Kính chào Quý khách, Ban quản lý rạp MagiCinema xin trân trọng phản hồi về ý kiến..."
+                  placeholder="Kính chào Quý khách, Ban quản lý rạp Magi Cinema xin trân trọng phản hồi về ý kiến..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:border-slate-900 text-sm outline-none transition-all resize-none text-gray-800"
                 />
                 <p className="text-[11px] text-gray-400 mt-1 italic">
-                  * Email sẽ được gửi trực tiếp thông qua hệ thống Mail của rạp phim MagiCinema đến trang thư của khách.
+                  * Email sẽ được gửi trực tiếp thông qua hệ thống Mail của rạp phim Magi Cinema đến trang thư của khách.
                 </p>
               </div>
 

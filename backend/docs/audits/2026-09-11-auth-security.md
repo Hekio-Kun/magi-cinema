@@ -2,7 +2,7 @@
 
 Phạm vi: `AuthenticationService`, `OtpStore`, `PasswordResetService`, `JwtService`, `SecurityConfig`, các controller/DTO auth-user-role-permission, `CloudinaryService`, `GlobalExceptionHandler`, `UserService`, entity/repository liên quan; đối chiếu thêm email và WebSocket. Các dòng bên dưới tính trên source sau sửa. Đường dẫn Java viết đầy đủ từ repository root để tra cứu chính xác.
 
-Root đã chạy Maven với Java 21: **137 test pass**, trong đó **11 regression test mới của phần auth**. Lần chạy này loại `Hcm26CplJsJava02Team4MovieTheaterApplicationTests`; chưa kiểm thử SMTP/Cloudinary thực tế, nhiều instance hoặc tải lớn. Không sửa `pom.xml` đang có thay đổi của người dùng.
+Root đã chạy Maven với Java 21: **158 test pass**, trong đó **11 regression test mới của phần auth**. Lần chạy này loại `Hcm26CplJsJava02Team4MovieTheaterApplicationTests`; chưa kiểm thử SMTP/Cloudinary thực tế, nhiều instance hoặc tải lớn. Không sửa `pom.xml` đang có thay đổi của người dùng.
 
 ## 🔴 Critical — Security — Khóa tài khoản hoặc thu hồi quyền chưa vô hiệu JWT đã cấp
 
