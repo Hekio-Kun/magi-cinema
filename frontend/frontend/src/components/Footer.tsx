@@ -174,11 +174,6 @@ export function Footer() {
                   Phim sắp chiếu
                 </Link>
               </li>
-              <li>
-                <Link to="/screening-date" className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium no-underline">
-                  Lịch chiếu hôm nay
-                </Link>
-              </li>
             </ul>
           </div>
 
