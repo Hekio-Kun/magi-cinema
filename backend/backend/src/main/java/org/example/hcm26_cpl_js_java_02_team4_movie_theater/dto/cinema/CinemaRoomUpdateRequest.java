@@ -30,6 +30,8 @@ public class CinemaRoomUpdateRequest {
     @Max(value = 200, message = "Số lượng ghế tối đa là 200")
     Integer seatQuantity;
 
+    @Min(value = 5, message = "Mỗi hàng phải có ít nhất 5 ghế")
+    @Max(value = 20, message = "Mỗi hàng tối đa 20 ghế")
     Integer seatsPerRow;
 
     RoomType type;

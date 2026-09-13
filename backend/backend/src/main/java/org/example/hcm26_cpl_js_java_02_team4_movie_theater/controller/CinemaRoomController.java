@@ -9,9 +9,14 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.cinema.CinemaRoo
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.cinema.CinemaRoomUpdateRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.cinema.CinemaRoomResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.cinema.CinemaRoomSeatSummaryResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.cinema.CinemaRoomOperationalSummaryResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.cinema.SeatLayoutRequest;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.seat.SeatResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.PageResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.RoomStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.CinemaRoomService;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.CinemaRoomLayoutService;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -22,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class CinemaRoomController {
 
     CinemaRoomService cinemaRoomService;
+    CinemaRoomLayoutService cinemaRoomLayoutService;
 
 
     @GetMapping
@@ -39,6 +45,30 @@ public class CinemaRoomController {
     public ApiResponse<CinemaRoomResponse> getCinemaRoomById(@PathVariable Long roomId) {
         return ApiResponse.<CinemaRoomResponse>builder()
                 .result(cinemaRoomService.getCinemaRoomById(roomId))
+                .build();
+    }
+
+    @GetMapping("/{roomId}/seat-summary")
+    public ApiResponse<CinemaRoomSeatSummaryResponse> getSeatSummary(@PathVariable Long roomId) {
+        return ApiResponse.<CinemaRoomSeatSummaryResponse>builder()
+                .result(cinemaRoomLayoutService.getSeatSummary(roomId))
+                .build();
+    }
+
+    @GetMapping("/operational-summary")
+    public ApiResponse<CinemaRoomOperationalSummaryResponse> getOperationalSummary() {
+        return ApiResponse.<CinemaRoomOperationalSummaryResponse>builder()
+                .result(cinemaRoomLayoutService.getOperationalSummary())
+                .build();
+    }
+
+    @PostMapping("/{roomId}/seat-layout")
+    public ApiResponse<java.util.List<SeatResponse>> applySeatLayout(
+            @PathVariable Long roomId,
+            @RequestBody @Valid SeatLayoutRequest request) {
+        return ApiResponse.<java.util.List<SeatResponse>>builder()
+                .message("Cập nhật sơ đồ ghế thành công!")
+                .result(cinemaRoomLayoutService.applyLayout(roomId, request))
                 .build();
     }
 

@@ -85,6 +85,13 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
 
     boolean existsBySeat_SeatId(Long seatId);
 
+    @Query("""
+            SELECT CASE WHEN COUNT(ss) > 0 THEN true ELSE false END
+            FROM ShowtimeSeat ss
+            WHERE ss.seat.cinemaRoom.cinemaRoomId = :cinemaRoomId
+            """)
+    boolean existsBySeat_CinemaRoom_CinemaRoomId(@Param("cinemaRoomId") Long cinemaRoomId);
+
     boolean existsByShowtime_ShowtimeIdAndSeat_SeatIdAndShowtimeSeatIdNot(
             Long showtimeId,
             Long seatId,

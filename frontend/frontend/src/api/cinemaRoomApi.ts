@@ -1,5 +1,13 @@
 import apiClient from './api';
-import { CinemaRoom, CinemaRoomCreationRequest, CinemaRoomUpdateRequest } from '@/types/cinemaRoom';
+import {
+  CinemaRoom,
+  CinemaRoomCreationRequest,
+  CinemaRoomOperationalSummary,
+  CinemaRoomSeatSummary,
+  CinemaRoomUpdateRequest,
+  SeatLayoutRequest,
+} from '@/types/cinemaRoom';
+import type { Seat } from '@/types/seat';
 
 export interface PageCinemaRoomResponse {
   content: CinemaRoom[];
@@ -43,6 +51,21 @@ export const cinemaRoomService = {
 
   restore: async (roomId: number): Promise<CinemaRoom> => {
     const response = await apiClient.patch(`/cinema-rooms/${roomId}/restore`);
+    return response.data.result;
+  },
+
+  getSeatSummary: async (roomId: number): Promise<CinemaRoomSeatSummary> => {
+    const response = await apiClient.get(`/cinema-rooms/${roomId}/seat-summary`);
+    return response.data.result;
+  },
+
+  getOperationalSummary: async (): Promise<CinemaRoomOperationalSummary> => {
+    const response = await apiClient.get('/cinema-rooms/operational-summary');
+    return response.data.result;
+  },
+
+  applySeatLayout: async (roomId: number, payload: SeatLayoutRequest): Promise<Seat[]> => {
+    const response = await apiClient.post(`/cinema-rooms/${roomId}/seat-layout`, payload);
     return response.data.result;
   },
 };

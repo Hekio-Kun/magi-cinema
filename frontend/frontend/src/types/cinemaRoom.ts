@@ -26,3 +26,37 @@ export interface CinemaRoomUpdateRequest {
     type: RoomType;
     status: RoomStatus;
 }
+
+export interface CinemaRoomSeatSummary {
+    cinemaRoomId: number;
+    totalSeats: number;
+    activeSeats: number;
+    inactiveSeats: number;
+    maintenanceSeats: number;
+    normalSeats: number;
+    vipSeats: number;
+    coupleSeats: number;
+    accessibleSeats: number;
+    rowCount: number;
+    seatsPerRow?: number;
+    generatedAt?: string;
+}
+
+export interface CinemaRoomOperationalSummary {
+    totalRooms: number;
+    activeRooms: number;
+    inactiveRooms: number;
+    maintenanceRooms: number;
+    totalSeats: number;
+    activeSeats: number;
+    maintenanceSeats: number;
+    generatedAt?: string;
+}
+
+export interface SeatLayoutRequest {
+    seatQuantity: number;
+    seatsPerRow: number;
+    vipRowsFromBack?: number;
+    coupleSeatsOnLastRow?: number;
+    accessibleSeatsOnFirstRow?: number;
+}

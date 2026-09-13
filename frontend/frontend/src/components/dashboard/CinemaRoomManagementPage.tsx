@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
 import {
-  Search, Plus, Edit, Loader2, X, MonitorPlay, ChevronLeft, ChevronRight, RefreshCw, Eye, Armchair, AlertTriangle, Ban, Rows3, Settings2
+  Search, Plus, Edit, Loader2, X, MonitorPlay, ChevronLeft, ChevronRight, RefreshCw, Eye, Armchair, AlertTriangle, Ban, Rows3, Settings2, Wand2
 } from "lucide-react";
 import {
   cinemaRoomService,
@@ -9,7 +9,7 @@ import {
 } from "@/api/cinemaRoomApi";
 import { getApiErrorMessage } from "@/api/errors";
 import { seatService } from "@/api/seatApi";
-import { CinemaRoom, CinemaRoomCreationRequest, CinemaRoomUpdateRequest, RoomStatus, RoomType } from "@/types/cinemaRoom";
+import { CinemaRoom, CinemaRoomCreationRequest, CinemaRoomOperationalSummary, CinemaRoomSeatSummary, CinemaRoomUpdateRequest, RoomStatus, RoomType, SeatLayoutRequest } from "@/types/cinemaRoom";
 import type { Seat, SeatStatus, SeatType, SeatUpdateRequest } from "@/types/seat";
 
 const FONT = "'Inter', sans-serif";
@@ -51,6 +51,7 @@ type CinemaRoomFormState = CinemaRoomUpdateRequest;
 const EMPTY_FORM: CinemaRoomFormState = {
   cinemaRoomName: "",
   seatQuantity: 50,
+  seatsPerRow: 10,
   type: "STANDARD",
   status: "ACTIVE",
 };
@@ -70,6 +71,7 @@ export function CinemaRoomManagementPage({ canManage = true }: { canManage?: boo
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
+  const [operationalSummary, setOperationalSummary] = useState<CinemaRoomOperationalSummary | null>(null);
   const [statusFilter, setStatusFilter] = useState<RoomStatus>("ACTIVE");
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -97,6 +99,9 @@ export function CinemaRoomManagementPage({ canManage = true }: { canManage?: boo
       setTotalPages(data.totalPages);
       setTotalElements(data.totalElements);
       setCurrentPage(data.page);
+      void cinemaRoomService.getOperationalSummary()
+        .then(setOperationalSummary)
+        .catch(() => setOperationalSummary(null));
     } catch (err) {
       console.error("Failed to fetch cinema rooms", err);
     } finally {
@@ -138,7 +143,8 @@ export function CinemaRoomManagementPage({ canManage = true }: { canManage?: boo
     setFormError("");
     const trimmedName = form.cinemaRoomName.trim();
     if (!trimmedName) { setFormError("Tên phòng chiếu là bắt buộc."); return; }
-    if (form.seatQuantity < 50 || form.seatQuantity > 200) { setFormError("Số lượng ghế phải từ 50 đến 200."); return; }
+    if (!Number.isInteger(form.seatQuantity) || form.seatQuantity < 50 || form.seatQuantity > 200) { setFormError("Số lượng ghế phải là số nguyên từ 50 đến 200."); return; }
+    if (form.seatsPerRow !== undefined && (form.seatsPerRow < 5 || form.seatsPerRow > 20)) { setFormError("Số ghế mỗi hàng phải từ 5 đến 20."); return; }
     
     // Validate duplicates
     if (rooms.some(r => r.cinemaRoomName.toLowerCase() === trimmedName.toLowerCase())) {
@@ -169,7 +175,8 @@ export function CinemaRoomManagementPage({ canManage = true }: { canManage?: boo
     setFormError("");
     const trimmedName = form.cinemaRoomName.trim();
     if (!trimmedName) { setFormError("Tên phòng chiếu là bắt buộc."); return; }
-    if (form.seatQuantity < 50 || form.seatQuantity > 200) { setFormError("Số lượng ghế phải từ 50 đến 200."); return; }
+    if (!Number.isInteger(form.seatQuantity) || form.seatQuantity < 50 || form.seatQuantity > 200) { setFormError("Số lượng ghế phải là số nguyên từ 50 đến 200."); return; }
+    if (form.seatsPerRow !== undefined && (form.seatsPerRow < 5 || form.seatsPerRow > 20)) { setFormError("Số ghế mỗi hàng phải từ 5 đến 20."); return; }
 
     // Validate duplicates (excluding the current one)
     if (rooms.some(r => r.cinemaRoomId !== selectedRoom.cinemaRoomId && r.cinemaRoomName.toLowerCase() === trimmedName.toLowerCase())) {
@@ -291,10 +298,10 @@ export function CinemaRoomManagementPage({ canManage = true }: { canManage?: boo
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 18 }}>
-          <RoomStat icon={<MonitorPlay size={17} />} label="Tổng phòng" value={totalElements} tone="#E63946" />
-          <RoomStat icon={<Rows3 size={17} />} label="Đang hoạt động" value={activeRooms} tone="#059669" />
-          <RoomStat icon={<Armchair size={17} />} label="Ghế trang này" value={currentPageSeats} tone="#2563eb" />
-          <RoomStat icon={<Settings2 size={17} />} label="Bảo trì" value={maintenanceRooms} tone="#d97706" />
+          <RoomStat icon={<MonitorPlay size={17} />} label="Tổng phòng" value={operationalSummary?.totalRooms ?? totalElements} tone="#E63946" />
+          <RoomStat icon={<Rows3 size={17} />} label="Đang hoạt động" value={operationalSummary?.activeRooms ?? activeRooms} tone="#059669" />
+          <RoomStat icon={<Armchair size={17} />} label="Tổng ghế" value={operationalSummary?.totalSeats ?? currentPageSeats} tone="#2563eb" />
+          <RoomStat icon={<Settings2 size={17} />} label="Phòng bảo trì" value={operationalSummary?.maintenanceRooms ?? maintenanceRooms} tone="#d97706" />
         </div>
 
         <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", padding: 14, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
@@ -638,7 +645,7 @@ function CinemaRoomFormModal({ title, isEdit, form, setForm, formError, formLoad
               </div>
               <div>
                 <label className={LABEL_CLS}>Ghế / hàng</label>
-                <input type="number" min={1} placeholder="10" className={INPUT_CLS} value={form.seatsPerRow || ""} onChange={(e) => setForm({ ...form, seatsPerRow: +e.target.value || undefined })} />
+                <input type="number" min={5} max={20} placeholder="10" className={INPUT_CLS} value={form.seatsPerRow || ""} onChange={(e) => setForm({ ...form, seatsPerRow: +e.target.value || undefined })} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Loại phòng</label>
@@ -676,6 +683,7 @@ function CinemaRoomFormModal({ title, isEdit, form, setForm, formError, formLoad
 
 function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; canManage: boolean; onClose: () => void }) {
   const [seats, setSeats] = useState<Seat[]>([]);
+  const [summary, setSummary] = useState<CinemaRoomSeatSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [selectedRowLabel, setSelectedRowLabel] = useState<string | null>(null);
@@ -688,6 +696,9 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
   
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showLayoutWizard, setShowLayoutWizard] = useState(false);
+  const [layoutSaving, setLayoutSaving] = useState(false);
+  const [layoutError, setLayoutError] = useState("");
 
   const fetchSeats = useCallback(async () => {
     setLoading(true);
@@ -699,6 +710,11 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
       });
       const sorted = [...data.content].sort(compareSeats);
       setSeats(sorted);
+      // The summary is a separate endpoint so the cards remain accurate even
+      // when a room has more seats than the page-size fallback above.
+      void cinemaRoomService.getSeatSummary(room.cinemaRoomId)
+        .then(setSummary)
+        .catch(() => setSummary(null));
       
       // Refresh selections
       setSelectedSeats(prev => {
@@ -885,6 +901,23 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
     }
   };
 
+  const handleApplyLayout = async (request: SeatLayoutRequest) => {
+    if (!canManage || layoutSaving) return;
+    setLayoutSaving(true);
+    setLayoutError("");
+    try {
+      await cinemaRoomService.applySeatLayout(room.cinemaRoomId, request);
+      toast.success("Đã tạo lại sơ đồ ghế theo mẫu.");
+      setShowLayoutWizard(false);
+      clearSelection();
+      await fetchSeats();
+    } catch (err: unknown) {
+      setLayoutError(getApiErrorMessage(err, "Không thể tạo lại sơ đồ ghế."));
+    } finally {
+      setLayoutSaving(false);
+    }
+  };
+
   const activeCount = seats.filter((seat) => seat.status === "ACTIVE").length;
   const maintenanceCount = seats.filter((seat) => seat.status === "MAINTENANCE").length;
 
@@ -928,11 +961,30 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
             </div>
             <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#f8fafc" }}>{room.cinemaRoomName}</h3>
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94a3b8" }}>
-              Tổng {seats.length} ghế · <span style={{ color: "#10b981" }}>{activeCount} hoạt động</span> · <span style={{ color: "#f59e0b" }}>{maintenanceCount} bảo trì</span>
+              Tổng {summary?.totalSeats ?? seats.length} ghế · <span style={{ color: "#10b981" }}>{summary?.activeSeats ?? activeCount} hoạt động</span> · <span style={{ color: "#f59e0b" }}>{summary?.maintenanceSeats ?? maintenanceCount} bảo trì</span>
             </p>
+            {summary && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                <SummaryPill label="Thường" value={summary.normalSeats} color="#60a5fa" />
+                <SummaryPill label="VIP" value={summary.vipSeats} color="#c4b5fd" />
+                <SummaryPill label="Đôi" value={summary.coupleSeats} color="#f9a8d4" />
+                <SummaryPill label="Hỗ trợ" value={summary.accessibleSeats} color="#67e8f9" />
+              </div>
+            )}
           </div>
-          <button 
-            onClick={onClose} 
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => { setLayoutError(""); setShowLayoutWizard(true); }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 34, padding: "0 12px", borderRadius: 9, border: "1px solid rgba(56,189,248,0.35)", background: "rgba(56,189,248,0.1)", color: "#7dd3fc", fontSize: 12, fontWeight: 800, cursor: "pointer" }}
+                title="Tạo lại sơ đồ theo mẫu"
+              >
+                <Wand2 size={14} /> Bố trí tự động
+              </button>
+            )}
+            <button
+            onClick={onClose}
             style={{ 
               width: 32, height: 32, borderRadius: "50%", 
               background: "rgba(255,255,255,0.05)", border: "none", cursor: "pointer", 
@@ -947,9 +999,10 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
               e.currentTarget.style.background = "rgba(255,255,255,0.05)";
               e.currentTarget.style.color = "#94a3b8";
             }}
-          >
-            <X size={18} />
-          </button>
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 0, minHeight: 0, flex: 1, userSelect: "none" }}>
@@ -1229,8 +1282,94 @@ function CinemaRoomSeatsModal({ room, canManage, onClose }: { room: CinemaRoom; 
           </aside>
         </div>
       </div>
+      {showLayoutWizard && canManage && (
+        <SeatLayoutWizard
+          room={room}
+          saving={layoutSaving}
+          error={layoutError}
+          onClose={() => setShowLayoutWizard(false)}
+          onSubmit={handleApplyLayout}
+        />
+      )}
     </div>
   );
+}
+
+function SummaryPill({ label, value, color }: { label: string; value: number; color: string }) {
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 7px", borderRadius: 999, background: "rgba(15,23,42,0.8)", color, fontSize: 10, fontWeight: 800 }}>{label} {value}</span>;
+}
+
+function SeatLayoutWizard({
+  room,
+  saving,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  room: CinemaRoom;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (request: SeatLayoutRequest) => void;
+}) {
+  const [form, setForm] = useState<SeatLayoutRequest>({
+    seatQuantity: room.seatQuantity || 50,
+    seatsPerRow: room.seatsPerRow || 10,
+    vipRowsFromBack: 2,
+    coupleSeatsOnLastRow: 0,
+    accessibleSeatsOnFirstRow: 2,
+  });
+  const rowCount = Math.ceil(form.seatQuantity / Math.max(1, form.seatsPerRow));
+  const lastRowCapacity = form.seatQuantity - ((rowCount - 1) * form.seatsPerRow);
+  const coupleCount = form.coupleSeatsOnLastRow || 0;
+  const invalidCouple = coupleCount % 2 !== 0 || coupleCount > lastRowCapacity;
+  const invalidVip = (form.vipRowsFromBack || 0) > rowCount;
+  const invalidAccessible = (form.accessibleSeatsOnFirstRow || 0) > Math.min(form.seatsPerRow, form.seatQuantity);
+  const invalid = !Number.isInteger(form.seatQuantity) || !Number.isInteger(form.seatsPerRow) || form.seatQuantity < 50 || form.seatQuantity > 200 || form.seatsPerRow < 5 || form.seatsPerRow > 20 || invalidCouple || invalidVip || invalidAccessible;
+
+  const updateNumber = (key: keyof SeatLayoutRequest, value: string) => {
+    const parsed = Number(value);
+    setForm(prev => ({ ...prev, [key]: Number.isFinite(parsed) ? parsed : 0 }));
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(2,6,23,0.72)", backdropFilter: "blur(5px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div style={{ width: "100%", maxWidth: 500, background: "#fff", borderRadius: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.35)", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#0369a1", fontSize: 12, fontWeight: 800, letterSpacing: "0.08em" }}><Wand2 size={15} /> MẪU BỐ TRÍ NHANH</div>
+            <h3 style={{ margin: "7px 0 0", fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Tạo lại sơ đồ {room.cinemaRoomName}</h3>
+            <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: "#64748b" }}>Dùng cho phòng chưa phát hành suất chiếu. Ghế cũ sẽ được sắp xếp lại theo thứ tự hàng.</p>
+          </div>
+          <button type="button" onClick={onClose} style={{ width: 30, height: 30, border: "none", borderRadius: "50%", background: "#f1f5f9", color: "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} /></button>
+        </div>
+        <form onSubmit={e => { e.preventDefault(); if (!invalid) onSubmit(form); }} style={{ padding: 22 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <WizardNumber label="Tổng số ghế" min={50} max={200} value={form.seatQuantity} onChange={v => updateNumber("seatQuantity", v)} />
+            <WizardNumber label="Ghế mỗi hàng" min={5} max={20} value={form.seatsPerRow} onChange={v => updateNumber("seatsPerRow", v)} />
+            <WizardNumber label="Hàng VIP (từ sau)" min={0} max={5} value={form.vipRowsFromBack || 0} onChange={v => updateNumber("vipRowsFromBack", v)} />
+            <WizardNumber label="Ghế đôi hàng cuối" min={0} max={12} step={2} value={form.coupleSeatsOnLastRow || 0} onChange={v => updateNumber("coupleSeatsOnLastRow", v)} />
+            <WizardNumber label="Ghế hỗ trợ hàng đầu" min={0} max={6} value={form.accessibleSeatsOnFirstRow || 0} onChange={v => updateNumber("accessibleSeatsOnFirstRow", v)} />
+          </div>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 13, lineHeight: 1.65 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Số hàng dự kiến</span><strong style={{ color: "#0f172a" }}>{rowCount}</strong></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Sức chứa hàng cuối</span><strong style={{ color: "#0f172a" }}>{lastRowCapacity}</strong></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Phân loại</span><strong style={{ color: "#0f172a" }}>{Math.max(0, form.seatQuantity - (form.coupleSeatsOnLastRow || 0) - (form.accessibleSeatsOnFirstRow || 0))} thường/VIP + {form.coupleSeatsOnLastRow || 0} đôi + {form.accessibleSeatsOnFirstRow || 0} hỗ trợ</strong></div>
+          </div>
+          {(invalidCouple || invalidVip || invalidAccessible) && <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 9, background: "#fff7ed", border: "1px solid #fed7aa", color: "#c2410c", fontSize: 12, lineHeight: 1.5 }}>{invalidCouple ? "Ghế đôi phải là số chẵn và không vượt quá hàng cuối. " : ""}{invalidVip ? "Số hàng VIP vượt quá số hàng phòng. " : ""}{invalidAccessible ? "Ghế hỗ trợ vượt quá hàng đầu. " : ""}</div>}
+          {error && <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 9, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+            <button type="button" onClick={onClose} style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 700, cursor: "pointer" }}>Hủy</button>
+            <button type="submit" disabled={saving || invalid} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: saving || invalid ? "#cbd5e1" : "#0284c7", color: "#fff", fontWeight: 800, cursor: saving || invalid ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 7 }}>{saving && <Loader2 size={14} className="animate-spin" />}{saving ? "Đang áp dụng..." : "Áp dụng sơ đồ"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function WizardNumber({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: string) => void }) {
+  return <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 800, color: "#64748b" }}>{label}<input type="number" min={min} max={max} step={step} value={value} onChange={e => onChange(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", border: "1px solid #cbd5e1", borderRadius: 8, color: "#0f172a", fontSize: 14, fontWeight: 700, outline: "none" }} /></label>;
 }
 
 function compareSeats(a: Seat, b: Seat) {

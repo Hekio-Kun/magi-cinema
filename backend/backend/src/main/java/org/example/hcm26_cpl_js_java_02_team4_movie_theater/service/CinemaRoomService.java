@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -136,7 +137,40 @@ public class CinemaRoomService {
         }
 
         List<Seat> existingSeats = seatRepository.findByCinemaRoom_CinemaRoomIdOrderBySeatRowAscSeatNumberAsc(room.getCinemaRoomId());
+        existingSeats.sort(Comparator.comparingInt((Seat seat) -> toSeatRowIndex(seat.getSeatRow()))
+                .thenComparing(Seat::getSeatNumber)
+                .thenComparing(Seat::getSeatId));
         int perRow = room.getSeatsPerRow() != null && room.getSeatsPerRow() > 0 ? room.getSeatsPerRow() : 10;
+
+        boolean reflowRequired = false;
+        int existingToUpdate = Math.min(existingSeats.size(), seatQuantity);
+        for (int index = 0; index < existingToUpdate; index++) {
+            Seat seat = existingSeats.get(index);
+            String expectedRow = buildSeatRow(index / perRow);
+            Integer expectedNumber = index % perRow + 1;
+            if (!expectedRow.equals(seat.getSeatRow()) || !expectedNumber.equals(seat.getSeatNumber())) {
+                reflowRequired = true;
+                break;
+            }
+        }
+
+        if (reflowRequired) {
+            if (showtimeSeatRepository.existsBySeat_CinemaRoom_CinemaRoomId(room.getCinemaRoomId())) {
+                throw new AppException(
+                        ErrorCode.VALIDATION_ERROR,
+                        "Phòng đã có dữ liệu suất chiếu nên không thể đổi số ghế mỗi hàng hoặc sắp xếp lại vị trí.");
+            }
+            // Avoid transient unique-key collisions when changing from e.g.
+            // 10 seats per row to 8 seats per row (A9 becomes B1).
+            for (int index = 0; index < existingSeats.size(); index++) {
+                Seat seat = existingSeats.get(index);
+                int temporaryNumber = 10_000 + index;
+                seat.setSeatRow("TMP");
+                seat.setSeatNumber(temporaryNumber);
+                seat.setSeatCode("TMP" + temporaryNumber);
+            }
+            seatRepository.saveAllAndFlush(existingSeats);
+        }
 
         for (int index = 0; index < seatQuantity; index++) {
             String expectedRow = buildSeatRow(index / perRow);
@@ -192,5 +226,19 @@ public class CinemaRoomService {
             value = value / 26 - 1;
         } while (value >= 0);
         return row.toString();
+    }
+
+    private int toSeatRowIndex(String seatRow) {
+        if (seatRow == null || seatRow.isBlank()) {
+            return Integer.MAX_VALUE;
+        }
+        int index = 0;
+        for (char current : seatRow.trim().toUpperCase().toCharArray()) {
+            if (current < 'A' || current > 'Z') {
+                return Integer.MAX_VALUE;
+            }
+            index = index * 26 + (current - 'A' + 1);
+        }
+        return index;
     }
 }
