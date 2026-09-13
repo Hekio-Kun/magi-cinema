@@ -1,0 +1,17 @@
+{
+  "name": "magi-cinema-qa",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed",
+    "test:hybrid": "powershell -ExecutionPolicy Bypass -File .\\run-hybrid.ps1",
+    "test:load": "k6 run k6/load.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.3"
+  }
+}

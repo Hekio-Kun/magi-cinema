@@ -124,6 +124,7 @@ public class SecurityConfig {
                         .requestMatchers("/contact/admin/**").hasAuthority("CONTACT_MANAGE")
                         .requestMatchers(HttpMethod.GET,
                                 "/dashboard/stats",
+                                "/dashboard/online-users",
                                 "/dashboard/notifications").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         .requestMatchers(HttpMethod.PUT,
                                 "/dashboard/notifications/read-all").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")

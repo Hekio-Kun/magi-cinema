@@ -20,6 +20,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.CinemaRoo
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.MovieRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.UserRepository;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.websocket.PresenceWebSocketHandler;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -44,6 +45,7 @@ public class DashboardService {
     private final CinemaRoomRepository cinemaRoomRepository;
     private final ShowtimeRepository showtimeRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final PresenceWebSocketHandler presenceWebSocketHandler;
 
     private final MovieMapper movieMapper;
     private final ShowtimeMapper showtimeMapper;
@@ -76,10 +78,19 @@ public class DashboardService {
                 .totalUsers(totalUsers)
                 .totalCinemaRooms(totalCinemaRooms)
                 .totalShowtimes(totalShowtimes)
+                .onlineUsers(presenceWebSocketHandler.getOnlineCount())
+                .peakOnlineUsersToday(presenceWebSocketHandler.getPeakToday())
                 .topMovies(topMovies)
                 .recentShowtimes(recentShowtimes)
                 .financialSummary(getFinancialSummary(range))
                 .build();
+    }
+
+    public Map<String, Object> getOnlineUsers() {
+        return Map.of(
+                "onlineCount", presenceWebSocketHandler.getOnlineCount(),
+                "peakToday", presenceWebSocketHandler.getPeakToday()
+        );
     }
 
     private FinancialSummaryResponse getFinancialSummary(DateRange range) {

@@ -1,7 +1,8 @@
-import { CalendarClock, Film, MonitorPlay, Users } from "lucide-react";
+import { CalendarClock, Film, MonitorPlay, Radio, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { type DashboardResponse } from "@/api/dashboardApi";
+import { useOnlineCount } from "@/hooks/useOnlineTracker";
 
 type KpiCard = {
   label: string;
@@ -13,7 +14,18 @@ type KpiCard = {
 };
 
 export function KPICards({ stats }: { stats: DashboardResponse | null }) {
+  const liveOnline = useOnlineCount(stats?.onlineUsers ?? 1);
+  const peakToday = Math.max(stats?.peakOnlineUsersToday ?? 1, liveOnline);
+
   const cards: KpiCard[] = [
+    {
+      label: "Đang trực tuyến (Live)",
+      value: liveOnline.toLocaleString("vi-VN"),
+      caption: `Cao nhất hôm nay: ${peakToday.toLocaleString("vi-VN")}`,
+      iconBg: "#D1FAE5",
+      iconColor: "#059669",
+      icon: <Radio size={18} />,
+    },
     {
       label: "Tổng phim",
       value: stats ? stats.totalMovies.toLocaleString("vi-VN") : "0",
@@ -49,7 +61,7 @@ export function KPICards({ stats }: { stats: DashboardResponse | null }) {
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16 }}>
       {cards.map((card) => (
         <div
           key={card.label}

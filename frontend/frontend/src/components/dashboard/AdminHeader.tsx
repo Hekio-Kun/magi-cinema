@@ -4,6 +4,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { notificationService, type DashboardNotification } from "@/api/notificationApi";
 import { DASHBOARD_PAGE_ACCESS, canAccessDashboardPage, normalizeRoles } from "@/utils/dashboardAccess";
 import { ChevronRight } from "lucide-react";
+import { useOnlineCount } from "@/hooks/useOnlineTracker";
 
 const FONT = "'Inter', sans-serif";
 const GOLD = "#f59e0b";
@@ -51,6 +52,7 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHeaderProps) {
   const { username, roles, scopes } = useCurrentUser();
+  const onlineCount = useOnlineCount(1);
   const canReadNotifications = canAccessDashboardPage("Tổng quan", normalizeRoles(username ? roles : []), username ? scopes : []);
   const [showNotifs, setShowNotifs] = useState(false);
   const [search, setSearch] = useState("");
@@ -231,6 +233,57 @@ export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHea
       <div style={{ flex: 1 }} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        {/* Real-time Online Users Badge */}
+        <div
+          title="Số người dùng đang truy cập hệ thống Magi Cinema theo thời gian thực"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 14px",
+            borderRadius: 20,
+            background: "#ECFDF5",
+            border: "1px solid #A7F3D0",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#065F46",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+            cursor: "default",
+          }}
+        >
+          <span
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              height: 8,
+              width: 8,
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                display: "inline-flex",
+                height: "100%",
+                width: "100%",
+                borderRadius: "50%",
+                background: "#10B981",
+                opacity: 0.75,
+                animation: "ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite",
+              }}
+            />
+            <span
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                borderRadius: "50%",
+                height: 8,
+                width: 8,
+                background: "#059669",
+              }}
+            />
+          </span>
+          <span>{onlineCount} trực tuyến</span>
+        </div>
 
         {/* Notifications */}
         <div style={{ position: "relative" }}>

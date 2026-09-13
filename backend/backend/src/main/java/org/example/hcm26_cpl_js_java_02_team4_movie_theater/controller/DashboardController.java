@@ -32,4 +32,13 @@ public class DashboardController {
                 .result(dashboardService.getDashboardStats(fromDate, toDate))
                 .build();
     }
+
+    @GetMapping("/online-users")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    public ApiResponse<java.util.Map<String, Object>> getOnlineUsers() {
+        return ApiResponse.<java.util.Map<String, Object>>builder()
+                .message("Lấy số lượng người dùng trực tuyến thành công")
+                .result(dashboardService.getOnlineUsers())
+                .build();
+    }
 }

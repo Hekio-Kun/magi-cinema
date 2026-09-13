@@ -17,6 +17,8 @@ public class DashboardResponse {
     private long totalUsers;
     private long totalCinemaRooms;
     private long totalShowtimes;
+    private long onlineUsers;
+    private long peakOnlineUsersToday;
 
     private List<MovieResponse> topMovies;
     private List<DashboardShowtimeResponse> recentShowtimes;

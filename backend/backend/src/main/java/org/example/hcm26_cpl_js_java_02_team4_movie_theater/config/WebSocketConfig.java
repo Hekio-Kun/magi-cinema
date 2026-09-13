@@ -4,6 +4,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.websocket.PresenceWebSocketHandler;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.websocket.SeatStatusWebSocketHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class WebSocketConfig implements WebSocketConfigurer {
 
     SeatStatusWebSocketHandler seatStatusWebSocketHandler;
+    PresenceWebSocketHandler presenceWebSocketHandler;
 
     @NonFinal
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000}")
@@ -26,6 +28,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(seatStatusWebSocketHandler, "/ws/seat-updates")
+                .setAllowedOrigins(allowedOrigins);
+        registry.addHandler(presenceWebSocketHandler, "/ws/presence")
                 .setAllowedOrigins(allowedOrigins);
     }
 }

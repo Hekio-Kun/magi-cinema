@@ -22,9 +22,16 @@ export interface DashboardResponse {
     totalUsers: number;
     totalCinemaRooms: number;
     totalShowtimes: number;
+    onlineUsers?: number;
+    peakOnlineUsersToday?: number;
     topMovies: MovieResponse[];
     recentShowtimes: DashboardShowtimeResponse[];
     financialSummary?: FinancialSummaryResponse | null;
+}
+
+export interface OnlineUsersResponse {
+    onlineCount: number;
+    peakToday: number;
 }
 
 export interface FinancialDailyResponse {
@@ -95,6 +102,10 @@ export const dashboardService = {
         const response = await apiClient.get('/dashboard/stats', {
             params: { fromDate, toDate },
         });
+        return response.data.result;
+    },
+    getOnlineUsers: async (): Promise<OnlineUsersResponse> => {
+        const response = await apiClient.get('/dashboard/online-users');
         return response.data.result;
     },
 };
