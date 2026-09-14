@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
@@ -33,6 +34,11 @@ public class GlobalExceptionHandler {
                 ? errorCode.getMessage()
                 : exception.getCustomMessage();
         return buildErrorResponse(errorCode, message);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiResponse<?>> handlingMaxUploadSize(MaxUploadSizeExceededException exception) {
+        return buildErrorResponse(ErrorCode.MEDIA_FILE_TOO_LARGE, ErrorCode.MEDIA_FILE_TOO_LARGE.getMessage());
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)

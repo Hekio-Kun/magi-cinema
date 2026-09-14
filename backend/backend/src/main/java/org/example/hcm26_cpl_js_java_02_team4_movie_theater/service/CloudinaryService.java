@@ -45,14 +45,14 @@ public class CloudinaryService {
      */
     public String uploadAudio(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Audio file cannot be empty");
+            throw new AppException(ErrorCode.MEDIA_FILE_INVALID);
         }
         if (file.getSize() > 50L * 1024 * 1024) {
-            throw new IllegalArgumentException("Audio file must be smaller than 50 MB");
+            throw new AppException(ErrorCode.MEDIA_FILE_TOO_LARGE);
         }
         String contentType = file.getContentType();
         if (contentType != null && !contentType.toLowerCase().startsWith("audio/")) {
-            throw new IllegalArgumentException("Only audio files are supported");
+            throw new AppException(ErrorCode.MEDIA_FILE_INVALID);
         }
 
         try {
@@ -62,9 +62,9 @@ public class CloudinaryService {
                     "public_id", UUID.randomUUID().toString()
             ));
             return uploadResult.get("secure_url").toString();
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             log.error("Failed to upload audio to Cloudinary", e);
-            throw new RuntimeException("Failed to upload audio", e);
+            throw new AppException(ErrorCode.MEDIA_UPLOAD_FAILED);
         }
     }
 
