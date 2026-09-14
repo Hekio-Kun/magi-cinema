@@ -169,7 +169,7 @@ export function CloudinaryAudioLabPage() {
       rememberTrack(title, url);
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      toast.success("Đã tải audio lên Cloudinary và sẵn sàng phát.");
+      toast.success("Đã tải audio lên Cloudinary. Landing page sẽ tự đồng bộ playlist.");
     } catch (error) {
       setUploadError(getApiErrorMessage(error, "Không thể tải audio lên Cloudinary."));
     } finally {

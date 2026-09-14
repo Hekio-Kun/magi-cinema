@@ -77,6 +77,7 @@ public enum ErrorCode implements BaseErrorCode {
     MEDIA_FILE_INVALID(1030, "File media không hợp lệ. Vui lòng chọn một file audio được hỗ trợ.", HttpStatus.BAD_REQUEST),
     MEDIA_FILE_TOO_LARGE(1031, "File audio vượt quá giới hạn 50 MB.", HttpStatus.PAYLOAD_TOO_LARGE),
     MEDIA_UPLOAD_FAILED(1032, "Không thể tải audio lên Cloudinary. Vui lòng kiểm tra cấu hình hoặc thử file khác.", HttpStatus.BAD_GATEWAY),
+    MEDIA_LIBRARY_UNAVAILABLE(1033, "Không thể lấy playlist audio từ Cloudinary.", HttpStatus.BAD_GATEWAY),
     CONTACT_NOT_FOUND(5001, "Không tìm thấy thông tin liên hệ!", HttpStatus.NOT_FOUND);
 
     int code;

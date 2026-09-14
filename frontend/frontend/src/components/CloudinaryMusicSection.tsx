@@ -10,12 +10,9 @@ import {
   VolumeX,
   Waves,
 } from "lucide-react";
+import { publicMediaService, type PublicAudioTrack } from "@/api/publicMediaApi";
 
-type PublicMusicTrack = {
-  title: string;
-  artist: string;
-  url: string;
-};
+type PublicMusicTrack = PublicAudioTrack;
 
 const formatTime = (value: number) => {
   if (!Number.isFinite(value) || value < 0) return "00:00";
@@ -44,7 +41,8 @@ function normalizeTrack(value: unknown): PublicMusicTrack | null {
 }
 
 /**
- * Reads public tracks without exposing Cloudinary credentials to the browser.
+ * Reads an optional fallback playlist without exposing Cloudinary credentials
+ * to the browser. The live playlist is loaded from the backend at runtime.
  * JSON is the preferred format; one `title|artist|url` entry per line is also
  * supported to make Render/Vite environment variables easier to edit.
  */
@@ -74,19 +72,51 @@ function readPublicTracks(rawValue: string | undefined): PublicMusicTrack[] {
     .slice(0, 20);
 }
 
-const PUBLIC_TRACKS = readPublicTracks(import.meta.env.VITE_PUBLIC_AUDIO_TRACKS);
+const FALLBACK_TRACKS = readPublicTracks(import.meta.env.VITE_PUBLIC_AUDIO_TRACKS);
+const TRACK_SYNC_INTERVAL_MILLIS = 30_000;
 
 export function CloudinaryMusicSection() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const activeIndexRef = useRef(0);
+  const [tracks, setTracks] = useState<PublicMusicTrack[]>(FALLBACK_TRACKS);
   const [activeTrackIndex, setActiveTrackIndex] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sourceError, setSourceError] = useState("");
+  const [isLoadingTracks, setIsLoadingTracks] = useState(FALLBACK_TRACKS.length === 0);
+  const [catalogError, setCatalogError] = useState("");
 
-  const activeTrack = PUBLIC_TRACKS[activeTrackIndex];
+  const activeTrack = tracks[activeTrackIndex];
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncTracks = () => {
+      publicMediaService.getAudioTracks()
+        .then((remoteTracks) => {
+          if (cancelled) return;
+          setTracks(remoteTracks);
+          setActiveTrackIndex((index) => remoteTracks.length === 0 ? 0 : Math.min(index, remoteTracks.length - 1));
+          setCatalogError("");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (FALLBACK_TRACKS.length === 0) {
+            setCatalogError("Chưa thể tải playlist. Vui lòng thử lại sau.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingTracks(false);
+        });
+    };
+    syncTracks();
+    const timer = window.setInterval(syncTracks, TRACK_SYNC_INTERVAL_MILLIS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     activeIndexRef.current = activeTrackIndex;
@@ -103,13 +133,13 @@ export function CloudinaryMusicSection() {
     const onError = () => setSourceError("Không thể tải bản nhạc. Hãy kiểm tra URL Cloudinary.");
     const onEnded = () => {
       setIsPlaying(false);
-      if (PUBLIC_TRACKS.length < 2) return;
-      const nextIndex = (activeIndexRef.current + 1) % PUBLIC_TRACKS.length;
+      if (tracks.length < 2) return;
+      const nextIndex = (activeIndexRef.current + 1) % tracks.length;
       setActiveTrackIndex(nextIndex);
       setCurrentTime(0);
       setDuration(0);
       setSourceError("");
-      audio.src = PUBLIC_TRACKS[nextIndex].url;
+      audio.src = tracks[nextIndex].url;
       audio.load();
       void audio.play().catch(() => setSourceError("Trình duyệt cần bạn bấm Phát để tiếp tục nghe."));
     };
@@ -129,14 +159,14 @@ export function CloudinaryMusicSection() {
       audio.removeEventListener("ended", onEnded);
       audio.removeEventListener("error", onError);
     };
-  }, [volume]);
+  }, [tracks, volume]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
 
   const loadTrack = (index: number, shouldPlay: boolean) => {
-    const track = PUBLIC_TRACKS[index];
+    const track = tracks[index];
     const audio = audioRef.current;
     if (!track || !audio) return;
 
@@ -163,8 +193,8 @@ export function CloudinaryMusicSection() {
   };
 
   const skipTrack = (direction: -1 | 1) => {
-    if (PUBLIC_TRACKS.length === 0) return;
-    const nextIndex = (activeTrackIndex + direction + PUBLIC_TRACKS.length) % PUBLIC_TRACKS.length;
+    if (tracks.length === 0) return;
+    const nextIndex = (activeTrackIndex + direction + tracks.length) % tracks.length;
     loadTrack(nextIndex, isPlaying);
   };
 
@@ -195,21 +225,27 @@ export function CloudinaryMusicSection() {
           <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/80 bg-white/65 px-3 py-2 text-xs font-bold text-slate-600 shadow-sm backdrop-blur"><Headphones size={15} className="text-violet-500" /> Nghe miễn phí</span>
         </header>
 
-        {PUBLIC_TRACKS.length === 0 ? (
+        {isLoadingTracks && tracks.length === 0 ? (
+          <div className="rounded-3xl border border-white/80 bg-white/70 p-8 text-center shadow-sm backdrop-blur sm:p-12">
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-950 text-violet-200 shadow-lg"><Waves size={28} className="animate-pulse" /></span>
+            <h3 className="mt-5 text-xl font-black text-slate-950">Đang tải playlist</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Magi Music đang kết nối tới thư viện audio của Cloudinary.</p>
+          </div>
+        ) : tracks.length === 0 ? (
           <div className="rounded-3xl border border-white/80 bg-white/70 p-8 text-center shadow-sm backdrop-blur sm:p-12">
             <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-950 text-violet-200 shadow-lg"><Music2 size={28} /></span>
             <h3 className="mt-5 text-xl font-black text-slate-950">Playlist đang được chuẩn bị</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Magi Cinema sẽ sớm cập nhật những bản nhạc phù hợp cho buổi xem phim của bạn.</p>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{catalogError || "Magi Cinema sẽ sớm cập nhật những bản nhạc phù hợp cho buổi xem phim của bạn."}</p>
           </div>
         ) : (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
             <section className="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-sm backdrop-blur sm:p-5">
               <div className="mb-4 flex items-center justify-between px-1">
-                <div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Playlist</p><p className="mt-1 text-sm font-bold text-slate-700">{PUBLIC_TRACKS.length} bản nhạc</p></div>
+                <div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Playlist</p><p className="mt-1 text-sm font-bold text-slate-700">{tracks.length} bản nhạc</p></div>
                 <Music2 size={19} className="text-violet-500" />
               </div>
               <div className="space-y-1.5" role="list" aria-label="Danh sách nhạc Magi Music">
-                {PUBLIC_TRACKS.map((track, index) => {
+                {tracks.map((track, index) => {
                   const selected = index === activeTrackIndex;
                   return (
                     <button

@@ -115,6 +115,7 @@ public class SecurityConfig {
                                 "/health",
                                 "/memberships/plans",
                                 "/memberships/tiers",
+                                "/public/audio",
                                 "/bookings/tickets/**",
                                 "/payment/zalopay/return",
                                 "/payment/momo/return",
