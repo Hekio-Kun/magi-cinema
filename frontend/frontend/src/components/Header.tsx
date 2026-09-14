@@ -313,6 +313,10 @@ function HeaderContent({ pathname }: { pathname: string }) {
             Khuyến mãi
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-red-600 transition-all duration-300 group-hover:w-full rounded-full"></span>
           </Link>
+          <a href={isLandingPage ? "#music" : "/#music"} className="relative group py-2" style={{ fontSize: "0.9rem", fontWeight: 600, color: "#374151", textDecoration: "none" }}>
+            Nghe nhạc
+            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-red-600 transition-all duration-300 group-hover:w-full rounded-full"></span>
+          </a>
           <button onClick={() => setIsContactOpen(true)} className="relative group py-2 bg-transparent border-none cursor-pointer" style={{ fontSize: "0.9rem", fontWeight: 600, color: "#374151" }}>
             Liên hệ
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-red-600 transition-all duration-300 group-hover:w-full rounded-full"></span>
@@ -457,6 +461,7 @@ function HeaderContent({ pathname }: { pathname: string }) {
                </div>
             </div>
             <Link to="/promotions" onClick={() => setMobileOpen(false)} style={{ padding: "12px 14px", borderRadius: 12, fontSize: "0.95rem", color: "#374151", textDecoration: "none", display: "block", fontWeight: 600, background: "#f9fafb" }}>Khuyến mãi</Link>
+            <a href={isLandingPage ? "#music" : "/#music"} onClick={() => setMobileOpen(false)} style={{ padding: "12px 14px", borderRadius: 12, fontSize: "0.95rem", color: "#374151", textDecoration: "none", display: "block", fontWeight: 600, background: "#f9fafb" }}>Nghe nhạc</a>
             <button onClick={() => { setMobileOpen(false); setIsContactOpen(true); }} style={{ padding: "12px 14px", borderRadius: 12, fontSize: "0.95rem", color: "#374151", textDecoration: "none", display: "block", fontWeight: 600, background: "#f9fafb", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}>Liên hệ</button>
           </div>
           
