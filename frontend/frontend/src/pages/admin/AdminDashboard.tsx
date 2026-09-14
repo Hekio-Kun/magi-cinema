@@ -21,6 +21,9 @@ const UserManagementPage = lazy(() =>
 const MovieManagementPage = lazy(() =>
   import("@/components/dashboard/MovieManagementPage").then((module) => ({ default: module.MovieManagementPage }))
 );
+const CloudinaryAudioLabPage = lazy(() =>
+  import("@/components/dashboard/CloudinaryAudioLabPage").then((module) => ({ default: module.CloudinaryAudioLabPage }))
+);
 const GenreManagementPage = lazy(() =>
   import("@/components/dashboard/GenreManagementPage").then((module) => ({ default: module.GenreManagementPage }))
 );
@@ -153,6 +156,8 @@ export function AdminDashboard() {
         return <MembershipManagementPage />;
       case "Quản lý phim":
         return <MovieManagementPage />;
+      case "Cloudinary Audio Lab":
+        return <CloudinaryAudioLabPage />;
       case "Thể loại":
         return <GenreManagementPage />;
       case "Phòng chiếu":

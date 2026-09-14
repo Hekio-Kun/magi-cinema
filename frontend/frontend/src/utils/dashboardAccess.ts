@@ -27,6 +27,7 @@ export const DASHBOARD_PAGE_ACCESS: Record<string, DashboardRole[]> = {
   "Tổng quan": ["ADMIN", "MANAGER"],
   "Báo cáo & thống kê": ["ADMIN", "MANAGER"],
   "Quản lý phim": ["ADMIN", "MANAGER"],
+  "Cloudinary Audio Lab": ["ADMIN", "MANAGER"],
   "Thể loại": ["ADMIN", "MANAGER"],
   "Phòng chiếu": ["ADMIN", "MANAGER", "STAFF"],
   "Lịch chiếu & ghế": ["ADMIN", "MANAGER", "STAFF"],
@@ -50,6 +51,7 @@ export const DASHBOARD_PAGE_ACCESS: Record<string, DashboardRole[]> = {
 
 export const DASHBOARD_PAGE_PERMISSION_ACCESS: Record<string, string[]> = {
   "Quản lý phim": ["MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE"],
+  "Cloudinary Audio Lab": ["MOVIE_CREATE", "MOVIE_UPDATE"],
   "Thể loại": ["MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE"],
   "Phòng chiếu": ["SHOWTIME_MANAGE", "BOOKING_VIEW"],
   "Lịch chiếu & ghế": ["SHOWTIME_MANAGE", "BOOKING_VIEW"],

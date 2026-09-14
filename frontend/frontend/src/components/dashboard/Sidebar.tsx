@@ -20,6 +20,7 @@ import {
   Globe2,
   MessageSquare,
   FileText,
+  Music2,
 } from "lucide-react";
 import { clearAuthToken } from "@/utils/authSession";
 import { useNavigate } from "react-router-dom";
@@ -64,6 +65,7 @@ const NAV_GROUPS = [
     group: "Hệ thống",
     items: [
       { icon: UserCog,         label: "Nhân viên" },
+      { icon: Music2,          label: "Cloudinary Audio Lab" },
       { icon: Clock,           label: "Lịch ca & chấm công" },
       { icon: FileText,        label: "Nhật ký nhân viên" },
       { icon: Shield,          label: "Vai trò & quyền hạn" },

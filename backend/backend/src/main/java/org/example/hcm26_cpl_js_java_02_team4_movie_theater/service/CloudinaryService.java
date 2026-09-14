@@ -38,6 +38,36 @@ public class CloudinaryService {
         }
     }
 
+    /**
+     * Upload an audio track to Cloudinary. Cloudinary delivers audio through
+     * its video resource type, which supports HTTP range requests for seeking
+     * and progressive playback in the browser.
+     */
+    public String uploadAudio(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Audio file cannot be empty");
+        }
+        if (file.getSize() > 50L * 1024 * 1024) {
+            throw new IllegalArgumentException("Audio file must be smaller than 50 MB");
+        }
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.toLowerCase().startsWith("audio/")) {
+            throw new IllegalArgumentException("Only audio files are supported");
+        }
+
+        try {
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                    "resource_type", "video",
+                    "folder", "magi-cinema/audio",
+                    "public_id", UUID.randomUUID().toString()
+            ));
+            return uploadResult.get("secure_url").toString();
+        } catch (IOException e) {
+            log.error("Failed to upload audio to Cloudinary", e);
+            throw new RuntimeException("Failed to upload audio", e);
+        }
+    }
+
     public void deleteImage(String imageUrl) {
         if (imageUrl == null || imageUrl.trim().isEmpty()) {
             return;

@@ -201,7 +201,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/combos",
                                 "/food-items",
-                                "/upload/image").hasAnyAuthority("COMBO_MANAGE", "MOVIE_CREATE", "MOVIE_UPDATE")
+                                "/upload/image",
+                                "/upload/audio").hasAnyAuthority("COMBO_MANAGE", "MOVIE_CREATE", "MOVIE_UPDATE")
                         .requestMatchers(HttpMethod.POST,
                                 "/promotions").hasAuthority("PROMOTION_MANAGE")
                         .requestMatchers(HttpMethod.POST,

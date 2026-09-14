@@ -26,4 +26,14 @@ public class UploadController {
                 .result(url)
                 .build();
     }
+
+    @PostMapping(value = "/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('MOVIE_CREATE', 'MOVIE_UPDATE', 'COMBO_MANAGE')")
+    public ApiResponse<String> uploadAudio(@RequestParam("file") MultipartFile file) {
+        String url = cloudinaryService.uploadAudio(file);
+        return ApiResponse.<String>builder()
+                .message("Tải audio lên Cloudinary thành công!")
+                .result(url)
+                .build();
+    }
 }
