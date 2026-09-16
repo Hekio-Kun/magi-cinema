@@ -10,6 +10,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.Showtim
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewItem;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerRecommendationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.CinemaRoom;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Movie;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.MoviePresentation;
@@ -24,6 +25,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.AppExcepti
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.CinemaRoomRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.MovieRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeRepository;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeSeatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +54,7 @@ class ShowtimePlannerServiceTest {
     @Mock MovieRepository movieRepository;
     @Mock CinemaRoomRepository cinemaRoomRepository;
     @Mock ShowtimeRepository showtimeRepository;
+    @Mock ShowtimeSeatRepository showtimeSeatRepository;
     @Mock ShowtimeService showtimeService;
     @Mock TicketPricingService ticketPricingService;
     @InjectMocks ShowtimePlannerService plannerService;
@@ -108,6 +111,40 @@ class ShowtimePlannerServiceTest {
         assertEquals(response.getAdditionalPossible(), response.getAdditionalByFormat().get("Standard"));
         assertTrue(response.getAllocations().stream().allMatch(item -> item.getAdditionalPossible() >= 0));
         assertTrue(response.getAllocations().getFirst().getMovieMaximumWithCurrentPlan() >= 4);
+    }
+
+    @Test
+    void recommendsQuotaFromRecentOccupancyAndSplitsItByPresentation() {
+        movie.setRating(7d);
+        List<Object[]> history = List.of(
+                new Object[]{1L, 11L, LocalDate.now().minusDays(2), 101L, 100L, 75L},
+                new Object[]{1L, 11L, LocalDate.now().minusDays(2), 102L, 100L, 75L},
+                new Object[]{1L, 11L, LocalDate.now().minusDays(1), 103L, 100L, 75L},
+                new Object[]{1L, 11L, LocalDate.now().minusDays(1), 104L, 100L, 75L});
+        when(showtimeSeatRepository.aggregatePlannerDemandByShowtime(any(), any())).thenReturn(history);
+
+        ShowtimePlannerRecommendationResponse response = plannerService.recommendShowtimeCounts(
+                ShowtimePlannerCapacityRequest.builder()
+                        .fromDate(planDate)
+                        .toDate(planDate)
+                        .openingTime(LocalTime.of(8, 0))
+                        .latestFinishTime(LocalTime.of(2, 0))
+                        .turnaroundMinutes(20)
+                        .slotIntervalMinutes(15)
+                        .primeStartTime(LocalTime.of(18, 0))
+                        .primeEndTime(LocalTime.of(22, 30))
+                        .cinemaRoomIds(List.of(21L))
+                        .movies(List.of(ShowtimePlannerMovieSelectionRequest.builder()
+                                .movieId(1L)
+                                .presentationIds(List.of(11L))
+                                .build()))
+                        .build());
+
+        assertEquals(3, response.getTotalSuggested());
+        assertTrue(response.getUsedHistoricalData());
+        assertEquals(75d, response.getItems().getFirst().getAverageOccupancyRate());
+        assertEquals("MEDIUM", response.getItems().getFirst().getConfidence());
+        assertEquals(3, response.getItems().getFirst().getSuggestedByPresentation().get(11L));
     }
 
     @Test

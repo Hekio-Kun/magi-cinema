@@ -29,6 +29,7 @@ import {
   type ShowtimePlannerPreviewItem,
   type ShowtimePlannerPreviewRequest,
   type ShowtimePlannerPreviewResponse,
+  type ShowtimePlannerRecommendationResponse,
 } from "@/api/showtimeApi";
 import type { MoviePresentationResponse, MovieResponse } from "@/api/movieApi";
 import type { CinemaRoom, RoomType } from "@/types/cinemaRoom";
@@ -157,6 +158,10 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
   const [capacityLoadingKey, setCapacityLoadingKey] = useState("");
   const [capacityError, setCapacityError] = useState("");
   const [capacityErrorKey, setCapacityErrorKey] = useState("");
+  const [recommendation, setRecommendation] = useState<ShowtimePlannerRecommendationResponse | null>(null);
+  const [recommendationResultKey, setRecommendationResultKey] = useState("");
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState("");
   const [quotaPreview, setQuotaPreview] = useState<ShowtimePlannerPreviewResponse | null>(null);
   const [quotaPreviewResultKey, setQuotaPreviewResultKey] = useState("");
   const [quotaPreviewError, setQuotaPreviewError] = useState("");
@@ -228,6 +233,7 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
   const visibleCapacity = capacityResultKey === capacityRequestKey ? capacity : null;
   const visibleCapacityLoading = capacityLoadingKey === capacityRequestKey && capacityLoading;
   const visibleCapacityError = capacityErrorKey === capacityRequestKey ? capacityError : "";
+  const visibleRecommendation = recommendationResultKey === capacityRequestKey ? recommendation : null;
 
   useEffect(() => {
     if (!capacityRequestKey || step === 3) return;
@@ -252,6 +258,37 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
         if (active) setCapacityLoading(false);
       }
     }, 100);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [capacityRequestKey, step]);
+
+  useEffect(() => {
+    if (step !== 2 || !capacityRequestKey) return;
+    let active = true;
+    const controller = new AbortController();
+    const request = JSON.parse(capacityRequestKey) as ShowtimePlannerCapacityRequest;
+    const timer = window.setTimeout(async () => {
+      setRecommendationLoading(true);
+      setRecommendationError("");
+      try {
+        const response = await showtimeApi.getPlannerRecommendations(request, controller.signal);
+        if (active) {
+          setRecommendationResultKey(capacityRequestKey);
+          setRecommendation(response);
+        }
+      } catch (error) {
+        if (active && !controller.signal.aborted) {
+          setRecommendationResultKey(capacityRequestKey);
+          setRecommendation(null);
+          setRecommendationError(getApiErrorMessage(error, "Không thể tính số suất đề xuất."));
+        }
+      } finally {
+        if (active) setRecommendationLoading(false);
+      }
+    }, 150);
     return () => {
       active = false;
       controller.abort();
@@ -485,6 +522,39 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
 
   const updatePlan = (movieId: number, patch: Partial<UiMoviePlan>) => {
     setPlans((current) => ({ ...current, [movieId]: { ...current[movieId], ...patch } }));
+  };
+
+  const applyRecommendations = (movieId?: number) => {
+    if (!visibleRecommendation) return;
+    const applicable = visibleRecommendation.items.filter(
+      (item) => (movieId === undefined || item.movieId === movieId) && item.suggestedShowtimes > 0,
+    );
+    if (applicable.length === 0) {
+      toast.warning("Chưa có đề xuất khả thi để áp dụng.");
+      return;
+    }
+    setPlans((current) => {
+      const next = { ...current };
+      applicable.forEach((item) => {
+        const plan = next[item.movieId];
+        if (!plan) return;
+        const suggestedCounts = Object.fromEntries(plan.presentationIds.map((presentationId) => [
+          presentationId,
+          item.suggestedByPresentation[String(presentationId)] ?? 0,
+        ]));
+        const suggestedTotal = Object.values(suggestedCounts).reduce((sum, count) => sum + count, 0);
+        next[item.movieId] = {
+          ...plan,
+          presentationMode: "MANUAL",
+          requestedShowtimes: suggestedTotal || item.suggestedShowtimes,
+          presentationCounts: suggestedTotal
+            ? suggestedCounts
+            : evenCounts(plan.presentationIds, item.suggestedShowtimes),
+        };
+      });
+      return next;
+    });
+    toast.success(movieId === undefined ? "Đã áp dụng đề xuất cho các phim." : "Đã áp dụng số suất đề xuất.");
   };
 
   const updatePresentationQuota = (movieId: number, presentationId: number, value: number) => {
@@ -792,16 +862,16 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-2.5">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.12em] text-red-500">
-              <Sparkles size={14} /> Lập lịch tối ưu
+              <Film size={14} /> Lập lịch chiếu
             </div>
-            <h2 className="mt-1 text-xl font-extrabold text-slate-900">Admin đặt số suất, hệ thống tìm phòng và giờ</h2>
+            <h2 className="mt-1 text-xl font-extrabold text-slate-900">Thiết lập điều kiện, quota và kiểm tra lịch trước khi tạo</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={20} /></button>
         </div>
 
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-2">
           <div className="mx-auto flex max-w-3xl items-center">
-            {["Chọn phim & phòng", "Nhập số suất", "Xem trước & xác nhận"].map((label, index) => {
+            {["Chọn phim & phòng", "Đề xuất & quota", "Xem trước & xác nhận"].map((label, index) => {
               const number = index + 1;
               const active = step === number;
               const done = step > number;
@@ -936,61 +1006,39 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
 
           {step === 2 && (
             <div className="space-y-4">
-              <section className="rounded-2xl border border-slate-200 bg-slate-900 p-4 text-white shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-bold text-slate-300">Tổng số suất của {selectedMovies.length} phim</div>
-                    <div className="mt-1 flex items-end gap-2">
-                      <strong className="text-3xl font-black">{quotaCalculationPending && !activeQuotaCapacityBudget ? "—" : totalRequested}</strong>
-                      <span className="pb-1 text-sm font-semibold text-slate-300">suất đã yêu cầu</span>
-                    </div>
+                    <h3 className="text-sm font-extrabold text-slate-900">Tổng quan kế hoạch</h3>
+                    <p className="mt-1 text-xs text-slate-500">Các con số được kiểm tra lại mỗi khi bạn thay đổi quota.</p>
                   </div>
-                    <div className="grid min-w-[420px] grid-cols-3 gap-2">
-                    <div className="rounded-xl bg-white/10 px-3 py-2">
-                      <div className="text-[10px] font-bold text-slate-300">Đã nhập</div>
-                      <div className="mt-1 text-xl font-black">{totalRequested} suất</div>
-                    </div>
-                      <div className="rounded-xl bg-white/10 px-3 py-2">
-                        <div className="text-[10px] font-bold text-slate-300">Sức chứa còn dư</div>
-                        <div className="mt-1 text-xl font-black text-emerald-300">{quotaCalculationPending && !activeQuotaCapacityBudget ? "—" : remainingTotalCapacity} suất</div>
-                      </div>
-                      <div className="rounded-xl bg-white/10 px-3 py-2">
-                        <div className="text-[10px] font-bold text-slate-300">{fillRemainingCapacity ? "Có thể tạo tối đa" : "Sẽ tạo"}</div>
-                        <div className="mt-1 text-xl font-black">{fillRemainingCapacity ? activeQuotaCapacityBudget?.totalMaximum ?? (visibleQuotaPreview?.complete ? totalRequested + remainingTotalCapacity : visibleQuotaPreview?.totalScheduled ?? "—") : totalRequested} suất</div>
-                      </div>
+                  <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1" role="radiogroup" aria-label="Cách sinh lịch">
+                    <button type="button" role="radio" aria-checked={!fillRemainingCapacity} onClick={() => setFillRemainingCapacity(false)} className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${!fillRemainingCapacity ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>Đúng quota</button>
+                    <button type="button" role="radio" aria-checked={fillRemainingCapacity} onClick={() => setFillRemainingCapacity(true)} className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${fillRemainingCapacity ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>Tận dụng phòng trống</button>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-400/30 bg-gradient-to-r from-indigo-950/80 to-slate-900 p-3 shadow-sm">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Sparkles className="text-amber-400 shrink-0" size={20} />
-                    <div>
-                      <div className="text-xs font-extrabold text-white">Thuật toán Phân bổ Tự động Tối ưu</div>
-                      <div className="mt-0.5 text-[10.5px] text-slate-300">Tự động tính toán sức chứa rạp, tối ưu số suất tối đa và ưu tiên xếp Phim Hot vào Khung Giờ Vàng ({primeStartTime} - {primeEndTime}).</div>
-                    </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold text-slate-500">Quota đang nhập</div>
+                    <div className="mt-1 text-2xl font-black text-slate-900">{totalRequested} <span className="text-sm font-bold text-slate-500">suất</span></div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={!visibleCapacity || validationErrors.length > 0 || previewLoading || quotaCalculationPending}
-                    onClick={() => requestPreview(false, true)}
-                    className="flex items-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs px-3 py-2 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <RefreshCw size={13} /> Tự động tính & tối ưu lại
-                  </button>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold text-slate-500">Phần còn có thể xếp</div>
+                    <div className="mt-1 text-2xl font-black text-emerald-700">{quotaCalculationPending && !activeQuotaCapacityBudget ? "—" : remainingTotalCapacity} <span className="text-sm font-bold text-slate-500">suất</span></div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-bold text-slate-500">Số hệ thống sẽ tạo</div>
+                    <div className="mt-1 text-2xl font-black text-slate-900">{fillRemainingCapacity ? activeQuotaCapacityBudget?.totalMaximum ?? (visibleQuotaPreview?.complete ? totalRequested + remainingTotalCapacity : visibleQuotaPreview?.totalScheduled ?? "—") : totalRequested} <span className="text-sm font-bold text-slate-500">suất</span></div>
+                  </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="min-w-0">
-                    <div className="text-xs font-extrabold text-white">Cách sinh lịch</div>
-                    <div className="mt-1 text-[10.5px] leading-4 text-slate-300">
-                      {fillRemainingCapacity
-                        ? `Hệ thống có thể tự thêm tối đa ${remainingTotalCapacity} suất ngoài số đã nhập để lấp thời gian trống.`
-                        : `Hệ thống chỉ tạo đúng ${totalRequested} suất đã nhập; phần sức chứa còn dư sẽ được giữ trống.`}
-                    </div>
-                  </div>
-                  <div className="inline-flex rounded-lg bg-slate-950/60 p-1" role="radiogroup" aria-label="Cách sinh lịch">
-                    <button type="button" role="radio" aria-checked={!fillRemainingCapacity} onClick={() => setFillRemainingCapacity(false)} className={`rounded-md px-3 py-2 text-xs font-extrabold transition ${!fillRemainingCapacity ? "bg-white text-slate-900 shadow-sm" : "text-slate-300 hover:text-white"}`}>Đúng số đã nhập</button>
-                    <button type="button" role="radio" aria-checked={fillRemainingCapacity} onClick={() => setFillRemainingCapacity(true)} className={`rounded-md px-3 py-2 text-xs font-extrabold transition ${fillRemainingCapacity ? "bg-emerald-400 text-slate-950 shadow-sm" : "text-slate-300 hover:text-white"}`}>Lấp đầy lịch</button>
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-extrabold text-slate-800">Cách hệ thống xử lý quota</div>
+                  <div className="mt-1 text-[11px] leading-5 text-slate-600">
+                    {fillRemainingCapacity
+                      ? `Quota là mức tối thiểu. Hệ thống có thể thêm tối đa ${remainingTotalCapacity} suất nếu còn phòng và giờ hợp lệ.`
+                      : `Hệ thống tạo đúng ${totalRequested} suất. Khoảng trống còn lại được giữ để admin chủ động sử dụng.`}
                   </div>
                 </div>
 
@@ -1002,14 +1050,14 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
                     const additional = remainingCapacityByFormat[format] ?? 0;
                     const missing = !quotaCalculationPending && scheduled < requested;
                     return (
-                      <div key={format} className={`rounded-xl border px-3 py-2.5 ${missing ? "border-red-400/70 bg-red-500/20" : "border-white/10 bg-white/5"}`}>
+                      <div key={format} className={`rounded-xl border px-3 py-2.5 ${missing ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm font-extrabold">{formatName(format)}</span>
-                          <span className={`text-sm font-black ${missing ? "text-red-200" : "text-white"}`}>
+                          <span className={`text-sm font-black ${missing ? "text-red-700" : "text-slate-900"}`}>
                             {quotaCalculationPending && !activeQuotaCapacityBudget ? "Đang tính" : missing ? `Thiếu ${requested - scheduled} suất` : `Còn tạo ${additional} suất`}
                           </span>
                         </div>
-                        <div className="mt-1 text-[10px] font-semibold text-slate-400">
+                        <div className="mt-1 text-[10px] font-semibold text-slate-500">
                           Đã nhập {requested} suất · sức chứa ước tính {maximum} suất
                         </div>
                       </div>
@@ -1017,15 +1065,62 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
                   })}
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
                   {quotaCalculationPending ? <Loader2 size={13} className="animate-spin" /> : visibleQuotaPreview?.complete ? <CheckCircle2 size={13} className="text-emerald-400" /> : <AlertTriangle size={13} className="text-amber-300" />}
                   <span>{quotaCalculationPending ? activeQuotaCapacityBudget ? "Đã cập nhật ngay; hệ thống đang kiểm tra lại sức xếp ở nền..." : "Đang xếp thử để kiểm tra số suất đã nhập..." : visibleQuotaPreview?.complete ? fillRemainingCapacity ? `Đã xếp đủ ${totalRequested} suất; hệ thống được phép tự thêm tối đa ${remainingTotalCapacity} suất.` : `Đã kiểm tra đủ ${totalRequested} suất; bản xem trước sẽ không tự thêm suất.` : `Kế hoạch đang thiếu ${visibleQuotaPreview?.totalMissing ?? 0} suất; hãy điều chỉnh trước khi tiếp tục.`}</span>
                 </div>
-                <div className="mt-2 text-[10.5px] leading-4 text-slate-400">
-                  {fillRemainingCapacity
-                    ? "Số bạn nhập là mức bắt buộc. Hệ thống tiếp tục lấp các khoảng trống hợp lệ và có thể tạo nhiều hơn số này."
-                    : "Số bạn nhập là tổng mục tiêu chính xác. Ví dụ nhập 33 suất thì bản xem trước chỉ tạo 33 suất."}
+              </section>
+
+              <section className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700"><Sparkles size={18} /></span>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900">Số suất đề xuất</h3>
+                      <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-600">
+                        Dựa trên vé đã bán trong 56 ngày gần nhất, tỷ lệ lấp đầy mục tiêu 60%, tín hiệu phim và sức xếp hiện tại. Đây là số tham khảo; admin vẫn quyết định quota cuối cùng.
+                      </p>
+                    </div>
+                  </div>
+                  <button type="button" disabled={!visibleRecommendation || recommendationLoading} onClick={() => applyRecommendations()} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    {recommendationLoading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Áp dụng tất cả
+                  </button>
                 </div>
+
+                {recommendationLoading && <div className="mt-4 flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-3 text-xs font-semibold text-slate-600"><Loader2 size={14} className="animate-spin text-indigo-600" /> Đang phân tích dữ liệu bán vé và sức xếp...</div>}
+                {recommendationError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{recommendationError}</div>}
+                {visibleRecommendation && (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {visibleRecommendation.items.map((item) => {
+                      const confidenceLabel = item.confidence === "HIGH" ? "Tin cậy cao" : item.confidence === "MEDIUM" ? "Tin cậy vừa" : "Ít dữ liệu";
+                      const confidenceClass = item.confidence === "HIGH" ? "bg-emerald-100 text-emerald-700" : item.confidence === "MEDIUM" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
+                      return (
+                        <div key={item.movieId} className="rounded-xl border border-indigo-100 bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-extrabold text-slate-900">{item.movieName}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10.5px] text-slate-500">
+                                <span className={`rounded-full px-2 py-0.5 font-bold ${confidenceClass}`}>{confidenceLabel} · {item.confidenceScore}%</span>
+                                {item.historicalShowtimeCount > 0
+                                  ? <span>{item.historicalTicketsSold} vé / {item.historicalShowtimeCount} suất · lấp đầy {item.averageOccupancyRate}%</span>
+                                  : <span>Chưa có lịch sử bán vé</span>}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-2xl font-black text-indigo-700">{item.suggestedShowtimes}</div>
+                              <div className="text-[10px] font-bold text-slate-500">suất đề xuất</div>
+                            </div>
+                          </div>
+                          <div className="mt-3 border-t border-slate-100 pt-2 text-[10.5px] leading-5 text-slate-600">{item.reasons[0]}</div>
+                          <div className="mt-2 flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-semibold text-slate-400">Sức xếp riêng lẻ tối đa: {item.maximumPossible} suất</span>
+                            <button type="button" disabled={item.suggestedShowtimes < 1} onClick={() => applyRecommendations(item.movieId)} className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-[11px] font-extrabold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40">Áp dụng</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
 
               {(visibleQuotaPreviewError || (visibleQuotaPreview && !visibleQuotaPreview.complete)) && (
@@ -1064,11 +1159,16 @@ export function ShowtimePlannerWizard({ movies, rooms, defaultDate, onClose, onS
                 const plan = plans[movie.movieId];
                 const presentations = activePresentations(movie).filter((item) => plan.presentationIds.includes(item.presentationId));
                 const manualTotal = plan.presentationIds.reduce((sum, id) => sum + (plan.presentationCounts[id] ?? 0), 0);
+                const movieRecommendation = visibleRecommendation?.items.find((item) => item.movieId === movie.movieId);
+                const recommendationDifference = movieRecommendation ? manualTotal - movieRecommendation.suggestedShowtimes : 0;
                 return (
                   <Card key={movie.movieId} title={movie.movieNameVn || movie.movieNameEnglish || `Phim #${movie.movieId}`} subtitle={`${movie.duration} phút · thay đổi số suất ở từng phiên bản bên dưới`}>
                     <div className="mb-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                      <span className="text-xs font-bold text-slate-500">Tổng suất của phim, cộng từ các phiên bản</span>
-                      <span className="rounded-full bg-slate-900 px-3 py-1 text-sm font-black text-white">{manualTotal} suất</span>
+                      <div>
+                        <div className="text-xs font-bold text-slate-600">Quota hiện tại: <span className="font-black text-slate-900">{manualTotal} suất</span></div>
+                        {movieRecommendation && <div className={`mt-1 text-[10.5px] font-semibold ${recommendationDifference === 0 ? "text-emerald-700" : "text-slate-500"}`}>{recommendationDifference === 0 ? "Đang bằng mức đề xuất" : `${Math.abs(recommendationDifference)} suất ${recommendationDifference > 0 ? "cao hơn" : "thấp hơn"} mức đề xuất ${movieRecommendation.suggestedShowtimes}`}</div>}
+                      </div>
+                      {movieRecommendation && movieRecommendation.suggestedShowtimes > 0 && recommendationDifference !== 0 && <button type="button" onClick={() => applyRecommendations(movie.movieId)} className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-indigo-700 hover:bg-indigo-50">Đặt về {movieRecommendation.suggestedShowtimes}</button>}
                     </div>
                     <div className="space-y-2">
                       {presentations.map((presentation) => {

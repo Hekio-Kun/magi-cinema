@@ -181,6 +181,31 @@ export interface ShowtimePlannerCapacityResponse {
   items: ShowtimePlannerCapacityItem[];
 }
 
+export interface ShowtimePlannerRecommendationItem {
+  movieId: number;
+  movieName: string;
+  suggestedShowtimes: number;
+  maximumPossible: number;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  confidenceScore: number;
+  historicalShowtimeCount: number;
+  historicalTicketsSold: number;
+  averageOccupancyRate: number;
+  suggestedByPresentation: Record<string, number>;
+  reasons: string[];
+}
+
+export interface ShowtimePlannerRecommendationResponse {
+  planningDays: number;
+  totalSuggested: number;
+  totalMaximum: number;
+  targetOccupancyRate: number;
+  historyFrom: string;
+  historyTo: string;
+  usedHistoricalData: boolean;
+  items: ShowtimePlannerRecommendationItem[];
+}
+
 export const showtimeApi = {
   getPublicScreeningDates: async () => {
     const res = await apiClient.get('/showtimes/dates');
@@ -230,6 +255,11 @@ export const showtimeApi = {
   getPlannerCapacity: async (data: ShowtimePlannerCapacityRequest, signal?: AbortSignal) => {
     const res = await apiClient.post('/showtimes/admin/planner/capacity', data, { signal });
     return res.data.result as ShowtimePlannerCapacityResponse;
+  },
+
+  getPlannerRecommendations: async (data: ShowtimePlannerCapacityRequest, signal?: AbortSignal) => {
+    const res = await apiClient.post('/showtimes/admin/planner/recommendations', data, { signal });
+    return res.data.result as ShowtimePlannerRecommendationResponse;
   },
 
   confirmPlanner: async (data: ShowtimePlannerConfirmRequest) => {

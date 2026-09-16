@@ -10,6 +10,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.Showtim
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerCapacityResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerRecommendationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.movie.MovieShowtimeByDateResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimeResponse;
@@ -124,6 +125,20 @@ public class ShowtimeController {
         return ApiResponse.<ShowtimePlannerCapacityResponse>builder()
                 .message("Đã tính số suất tối đa của từng phiên bản.")
                 .result(showtimePlannerService.calculateCapacity(request))
+                .build();
+    }
+
+    /**
+     * ADMIN - Đề xuất quota theo dữ liệu bán vé gần đây và đặc điểm phim, chưa ghi database.
+     * POST /showtimes/admin/planner/recommendations
+     */
+    @PostMapping("/admin/planner/recommendations")
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
+    public ApiResponse<ShowtimePlannerRecommendationResponse> recommendPlannerQuota(
+            @Valid @RequestBody ShowtimePlannerCapacityRequest request) {
+        return ApiResponse.<ShowtimePlannerRecommendationResponse>builder()
+                .message("Đã tính số suất đề xuất.")
+                .result(showtimePlannerService.recommendShowtimeCounts(request))
                 .build();
     }
 

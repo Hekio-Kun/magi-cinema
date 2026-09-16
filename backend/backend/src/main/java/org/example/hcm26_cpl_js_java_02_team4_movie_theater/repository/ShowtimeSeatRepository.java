@@ -127,4 +127,22 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
             GROUP BY st.movie.movieId, p.presentationId, st.showtimeId
             """)
     List<Object[]> aggregateDemandByShowtime(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
+
+    @Query("""
+            SELECT st.movie.movieId,
+                   p.presentationId,
+                   st.showDate,
+                   st.showtimeId,
+                   COUNT(ss),
+                   SUM(CASE WHEN ss.status = org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.ShowtimeSeatStatus.BOOKED THEN 1 ELSE 0 END)
+            FROM ShowtimeSeat ss
+            JOIN ss.showtime st
+            LEFT JOIN st.presentation p
+            WHERE st.showDate BETWEEN :fromDate AND :toDate
+              AND st.status <> org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.ShowtimeStatus.CANCELLED
+            GROUP BY st.movie.movieId, p.presentationId, st.showDate, st.showtimeId
+            """)
+    List<Object[]> aggregatePlannerDemandByShowtime(
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
 }

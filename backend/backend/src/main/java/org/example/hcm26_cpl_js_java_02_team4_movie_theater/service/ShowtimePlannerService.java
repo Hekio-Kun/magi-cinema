@@ -18,6 +18,8 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.Showtim
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewItem;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerPreviewResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerRecommendationItem;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimePlannerRecommendationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.showtime.ShowtimeResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.CinemaRoom;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Movie;
@@ -31,6 +33,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.ErrorCode;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.CinemaRoomRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.MovieRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeRepository;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.ShowtimeSeatRepository;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.validation.MoviePresentationCompatibility;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -64,6 +67,7 @@ public class ShowtimePlannerService {
     MovieRepository movieRepository;
     CinemaRoomRepository cinemaRoomRepository;
     ShowtimeRepository showtimeRepository;
+    ShowtimeSeatRepository showtimeSeatRepository;
     ShowtimeService showtimeService;
     TicketPricingService ticketPricingService;
 
@@ -140,6 +144,180 @@ public class ShowtimePlannerService {
                 .maximumByFormat(maximumByFormat)
                 .items(items)
                 .build();
+    }
+
+    @Transactional
+    @PreAuthorize("hasAuthority('SHOWTIME_MANAGE')")
+    public ShowtimePlannerRecommendationResponse recommendShowtimeCounts(ShowtimePlannerCapacityRequest request) {
+        ShowtimePlannerCapacityResponse capacity = calculateCapacity(request);
+        // Do not include today's unfinished sessions: their occupancy would bias
+        // the recommendation downward before all sales have been completed.
+        LocalDate historyTo = LocalDate.now().minusDays(1);
+        LocalDate historyFrom = historyTo.minusDays(55);
+        Set<Long> selectedMovieIds = request.getMovies().stream()
+                .map(selection -> selection.getMovieId())
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<Long, DemandHistory> historyByMovie = new HashMap<>();
+
+        for (Object[] row : showtimeSeatRepository.aggregatePlannerDemandByShowtime(historyFrom, historyTo)) {
+            Long movieId = numberAsLong(row[0]);
+            if (!selectedMovieIds.contains(movieId)) continue;
+            Long presentationId = row[1] == null ? null : numberAsLong(row[1]);
+            LocalDate showDate = (LocalDate) row[2];
+            long seats = numberAsLong(row[4]);
+            long booked = numberAsLong(row[5]);
+            historyByMovie.computeIfAbsent(movieId, ignored -> new DemandHistory())
+                    .add(presentationId, showDate, seats, booked);
+        }
+
+        int planningDays = capacity.getPlanningDays();
+        List<RecommendationDraft> drafts = new ArrayList<>();
+        for (var selection : request.getMovies()) {
+            Movie movie = movieRepository.findById(selection.getMovieId())
+                    .orElseThrow(() -> new AppException(ErrorCode.MOVIE_NOT_FOUND));
+            DemandHistory history = historyByMovie.getOrDefault(movie.getMovieId(), new DemandHistory());
+            int movieMaximum = capacity.getItems().stream()
+                    .filter(item -> item.getMovieId().equals(movie.getMovieId()))
+                    .mapToInt(item -> valueOr(item.getMaximumPossible(), 0))
+                    .sum();
+            int fallbackPerDay = fallbackShowtimesPerDay(movie, request);
+            double suggestedPerDay;
+            if (history.showtimeCount >= 3 && !history.activeDates.isEmpty()) {
+                double showsPerActiveDay = (double) history.showtimeCount / history.activeDates.size();
+                double demandFactor = Math.max(0.5, Math.min(1.6, history.occupancyRate() / 0.60));
+                suggestedPerDay = Math.max(1.0, showsPerActiveDay * demandFactor);
+            } else if (history.showtimeCount > 0) {
+                double showsPerActiveDay = (double) history.showtimeCount / history.activeDates.size();
+                suggestedPerDay = (fallbackPerDay + Math.max(1.0, showsPerActiveDay)) / 2.0;
+            } else {
+                suggestedPerDay = fallbackPerDay;
+            }
+            int rawSuggestion = Math.max(1, (int) Math.ceil(suggestedPerDay * planningDays));
+            int suggested = movieMaximum > 0 ? Math.min(Math.min(rawSuggestion, movieMaximum), 100) : 0;
+            drafts.add(new RecommendationDraft(movie, selection.getPresentationIds(), history, movieMaximum, suggested));
+        }
+
+        reduceToGlobalCapacity(drafts, valueOr(capacity.getTotalMaximum(), 0));
+        List<ShowtimePlannerRecommendationItem> items = drafts.stream()
+                .map(draft -> toRecommendationItem(draft, capacity))
+                .toList();
+        return ShowtimePlannerRecommendationResponse.builder()
+                .planningDays(planningDays)
+                .totalSuggested(items.stream().mapToInt(ShowtimePlannerRecommendationItem::getSuggestedShowtimes).sum())
+                .totalMaximum(capacity.getTotalMaximum())
+                .targetOccupancyRate(60d)
+                .historyFrom(historyFrom)
+                .historyTo(historyTo)
+                .usedHistoricalData(items.stream().anyMatch(item -> item.getHistoricalShowtimeCount() > 0))
+                .items(items)
+                .build();
+    }
+
+    private ShowtimePlannerRecommendationItem toRecommendationItem(
+            RecommendationDraft draft,
+            ShowtimePlannerCapacityResponse capacity) {
+        DemandHistory history = draft.history;
+        Map<Long, Integer> maximumByPresentation = capacity.getItems().stream()
+                .filter(item -> item.getMovieId().equals(draft.movie.getMovieId()))
+                .collect(Collectors.toMap(
+                        ShowtimePlannerCapacityItem::getPresentationId,
+                        item -> valueOr(item.getMaximumPossible(), 0),
+                        Integer::max,
+                        LinkedHashMap::new));
+        Map<Long, Integer> suggestedByPresentation = distributeRecommendation(
+                draft.suggested,
+                draft.presentationIds,
+                maximumByPresentation,
+                history.bookedByPresentation);
+        int confidenceScore = confidenceScore(history);
+        List<String> reasons = new ArrayList<>();
+        if (history.showtimeCount > 0) {
+            reasons.add("Dựa trên %d suất và %d vé đã bán trong 56 ngày gần nhất."
+                    .formatted(history.showtimeCount, history.bookedSeats));
+            reasons.add("Tỷ lệ lấp đầy trung bình %d%%; mức tham chiếu đang dùng là 60%%."
+                    .formatted(Math.round(history.occupancyRate() * 100)));
+        } else {
+            reasons.add("Chưa có lịch sử bán vé; hệ thống dùng tín hiệu của phim và số ngày lập lịch.");
+        }
+        if (Boolean.TRUE.equals(draft.movie.getIsHot())) {
+            reasons.add("Phim được đánh dấu Hot nên nhận mức khởi tạo cao hơn.");
+        } else if (draft.movie.getRating() != null && draft.movie.getRating() >= 8) {
+            reasons.add("Điểm đánh giá từ 8 trở lên làm tăng nhẹ mức đề xuất ban đầu.");
+        }
+        if (draft.suggested >= draft.movieMaximum && draft.movieMaximum > 0) {
+            reasons.add("Đề xuất đã được giới hạn theo sức xếp hiện tại của phòng và khung giờ.");
+        }
+        if (draft.suggested == 0) {
+            reasons.add("Không còn vị trí hợp lệ cho các phiên bản đã chọn trong phạm vi này.");
+        }
+        return ShowtimePlannerRecommendationItem.builder()
+                .movieId(draft.movie.getMovieId())
+                .movieName(movieName(draft.movie))
+                .suggestedShowtimes(draft.suggested)
+                .maximumPossible(draft.movieMaximum)
+                .confidence(confidenceScore >= 80 ? "HIGH" : confidenceScore >= 55 ? "MEDIUM" : "LOW")
+                .confidenceScore(confidenceScore)
+                .historicalShowtimeCount(history.showtimeCount)
+                .historicalTicketsSold(Math.toIntExact(Math.min(Integer.MAX_VALUE, history.bookedSeats)))
+                .averageOccupancyRate(Math.round(history.occupancyRate() * 1000d) / 10d)
+                .suggestedByPresentation(suggestedByPresentation)
+                .reasons(reasons)
+                .build();
+    }
+
+    private int fallbackShowtimesPerDay(Movie movie, ShowtimePlannerCapacityRequest request) {
+        int result = Boolean.TRUE.equals(movie.getIsHot()) ? 3
+                : movie.getRating() != null && movie.getRating() >= 8 ? 2 : 1;
+        boolean opensNearPlanningWindow = movie.getFromDate() != null
+                && !movie.getFromDate().isAfter(request.getToDate())
+                && !movie.getFromDate().isBefore(request.getFromDate().minusDays(14));
+        return Math.min(4, result + (opensNearPlanningWindow ? 1 : 0));
+    }
+
+    private void reduceToGlobalCapacity(List<RecommendationDraft> drafts, int totalMaximum) {
+        int total = drafts.stream().mapToInt(draft -> draft.suggested).sum();
+        while (total > totalMaximum) {
+            RecommendationDraft reducible = drafts.stream()
+                    .filter(draft -> draft.suggested > (draft.movieMaximum > 0 ? 1 : 0))
+                    .max(Comparator.comparingInt(draft -> draft.suggested))
+                    .orElse(null);
+            if (reducible == null) break;
+            reducible.suggested--;
+            total--;
+        }
+    }
+
+    private Map<Long, Integer> distributeRecommendation(
+            int total,
+            List<Long> presentationIds,
+            Map<Long, Integer> maximumByPresentation,
+            Map<Long, Long> bookedByPresentation) {
+        Map<Long, Integer> result = new LinkedHashMap<>();
+        presentationIds.forEach(id -> result.put(id, 0));
+        for (int i = 0; i < total; i++) {
+            Long next = presentationIds.stream()
+                    .filter(id -> result.get(id) < maximumByPresentation.getOrDefault(id, 0))
+                    .min(Comparator
+                            .comparingDouble((Long id) -> (double) result.get(id)
+                                    / Math.max(1L, bookedByPresentation.getOrDefault(id, 0L)))
+                            .thenComparingInt(id -> result.get(id))
+                            .thenComparingLong(Long::longValue))
+                    .orElse(null);
+            if (next == null) break;
+            result.computeIfPresent(next, (id, count) -> count + 1);
+        }
+        return result;
+    }
+
+    private int confidenceScore(DemandHistory history) {
+        if (history.showtimeCount == 0) return 30;
+        int score = 40 + Math.min(30, history.showtimeCount * 3)
+                + Math.min(25, Math.toIntExact(history.bookedSeats / 10));
+        return Math.min(95, score);
+    }
+
+    private long numberAsLong(Object value) {
+        return value == null ? 0L : ((Number) value).longValue();
     }
 
     @Transactional
@@ -1395,6 +1573,47 @@ public class ShowtimePlannerService {
 
     private AppException validation(String message) {
         return new AppException(ErrorCode.VALIDATION_ERROR, message);
+    }
+
+    private static final class DemandHistory {
+        int showtimeCount;
+        long totalSeats;
+        long bookedSeats;
+        final Set<LocalDate> activeDates = new HashSet<>();
+        final Map<Long, Long> bookedByPresentation = new HashMap<>();
+
+        void add(Long presentationId, LocalDate showDate, long seats, long booked) {
+            showtimeCount++;
+            totalSeats += seats;
+            bookedSeats += booked;
+            activeDates.add(showDate);
+            if (presentationId != null) bookedByPresentation.merge(presentationId, booked, Long::sum);
+        }
+
+        double occupancyRate() {
+            return totalSeats == 0 ? 0d : (double) bookedSeats / totalSeats;
+        }
+    }
+
+    private static final class RecommendationDraft {
+        final Movie movie;
+        final List<Long> presentationIds;
+        final DemandHistory history;
+        final int movieMaximum;
+        int suggested;
+
+        RecommendationDraft(
+                Movie movie,
+                List<Long> presentationIds,
+                DemandHistory history,
+                int movieMaximum,
+                int suggested) {
+            this.movie = movie;
+            this.presentationIds = presentationIds;
+            this.history = history;
+            this.movieMaximum = movieMaximum;
+            this.suggested = suggested;
+        }
     }
 
     private static final class Allocation {
