@@ -13,6 +13,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.Showtim
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -32,7 +33,9 @@ public class ShowtimeSeatResponse {
     SeatType seatType;
     Integer basePrice;
     Integer seatSurcharge;
+    Integer scheduleAdjustment;
     Integer finalPrice;
+    List<String> appliedPricingRules;
     LocalDate showDate;
     LocalTime startTime;
     LocalTime endTime;

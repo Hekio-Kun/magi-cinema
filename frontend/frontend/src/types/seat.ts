@@ -45,7 +45,9 @@ export interface ShowtimeSeat {
   seatType?: SeatType | null;
   basePrice?: number | null;
   seatSurcharge?: number | null;
+  scheduleAdjustment?: number | null;
   finalPrice?: number | null;
+  appliedPricingRules?: string[];
   showDate?: string | null;
   startTime?: string | null;
   endTime?: string | null;

@@ -31,7 +31,7 @@ export const DASHBOARD_PAGE_ACCESS: Record<string, DashboardRole[]> = {
   "Thể loại": ["ADMIN", "MANAGER"],
   "Phòng chiếu": ["ADMIN", "MANAGER", "STAFF"],
   "Lịch chiếu & ghế": ["ADMIN", "MANAGER", "STAFF"],
-  "Cấu hình giá vé": ["ADMIN", "MANAGER", "STAFF"],
+  "Cấu hình giá vé": ["ADMIN", "MANAGER"],
   "Bán vé tại quầy": ["ADMIN", "MANAGER", "STAFF"],
   "Bán bắp nước tại quầy": [],
   "Ca thu ngân & đối soát": [],

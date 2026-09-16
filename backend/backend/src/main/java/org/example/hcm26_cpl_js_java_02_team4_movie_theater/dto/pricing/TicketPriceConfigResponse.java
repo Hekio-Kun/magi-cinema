@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Data
 @Builder
@@ -23,5 +24,17 @@ public class TicketPriceConfigResponse {
     Integer coupleSeatSurcharge;
     Integer disabledSeatSurcharge;
     Integer u22BasePrice;
+    Boolean u22Enabled;
+    Integer weekendSurcharge;
+    LocalTime earlyBirdEnd;
+    Integer earlyBirdDiscount;
+    LocalTime primeTimeStart;
+    LocalTime primeTimeEnd;
+    Integer primeTimeSurcharge;
+    LocalTime lateShowStart;
+    Integer lateShowSurcharge;
+    Integer priceRoundingUnit;
+    String updatedBy;
+    Long version;
     LocalDateTime updatedAt;
 }

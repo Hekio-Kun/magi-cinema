@@ -135,8 +135,14 @@ function getCouplePartnerSeat(seat: ShowtimeSeat, seats: ShowtimeSeat[]) {
 const normalPrice = (seat: ShowtimeSeat, config?: TicketPriceConfig | null) =>
   seat.finalPrice ?? (seat.basePrice ?? config?.standard2dPrice ?? 75_000) + (seat.seatSurcharge ?? 0);
 
-const farePrice = (seat: ShowtimeSeat, fare: Fare, config?: TicketPriceConfig | null) =>
-  fare === "U22" ? Math.min(normalPrice(seat, config), (config?.u22BasePrice ?? 55_000) + (seat.seatSurcharge ?? 0)) : normalPrice(seat, config);
+const farePrice = (seat: ShowtimeSeat, fare: Fare, config?: TicketPriceConfig | null) => {
+  if (fare !== "U22" || config?.u22Enabled === false) return normalPrice(seat, config);
+  const rawU22 = (config?.u22BasePrice ?? 55_000)
+    + (seat.seatSurcharge ?? 0)
+    + (seat.scheduleAdjustment ?? 0);
+  const unit = config?.priceRoundingUnit || 1_000;
+  return Math.min(normalPrice(seat, config), Math.ceil(Math.max(1_000, rawU22) / unit) * unit);
+};
 
 const foodVariantLabel = (food: FoodItemResponse, variant: FoodVariantResponse) =>
   variant.displayName?.trim()
@@ -892,6 +898,10 @@ export function StaffTicketSalesPage() {
       return;
     }
     if (option === "U22") {
+      if (pricingConfig?.u22Enabled === false) {
+        toast.info("Chính sách vé U22 đang tạm ngừng.");
+        return;
+      }
       applyFareToAll("U22");
       return;
     }
@@ -1650,6 +1660,7 @@ export function StaffTicketSalesPage() {
                             type="checkbox"
                             className="h-5 w-5 accent-amber-500"
                             checked={selectedTicketOption === "U22"}
+                            disabled={pricingConfig?.u22Enabled === false}
                             onChange={(event) => selectTicketOption(event.target.checked ? "U22" : "STANDARD")}
                           />
                         </label>
@@ -1662,8 +1673,9 @@ export function StaffTicketSalesPage() {
                         <div className="grid gap-3 sm:grid-cols-2">
                           <button
                             type="button"
+                            disabled={pricingConfig?.u22Enabled === false}
                             onClick={() => selectTicketOption(selectedTicketOption === "U22" ? "STANDARD" : "U22")}
-                            className={`rounded-xl border p-4 text-left transition ${selectedTicketOption === "U22" ? "border-amber-500 bg-amber-50 text-amber-800" : "bg-white"}`}
+                            className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${selectedTicketOption === "U22" ? "border-amber-500 bg-amber-50 text-amber-800" : "bg-white"}`}
                           >
                             <b>Áp dụng U22 cho toàn bộ vé</b>
                             <p className="mt-1 text-xs opacity-70">Kiểm tra giấy tờ một lần và vẫn tích điểm theo hạng.</p>

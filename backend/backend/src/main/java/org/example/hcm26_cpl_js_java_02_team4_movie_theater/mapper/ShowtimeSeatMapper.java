@@ -6,6 +6,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Seat;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Showtime;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.ShowtimeSeat;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.TicketPricingService;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.pricing.TicketPriceBreakdown;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -25,8 +26,9 @@ public class ShowtimeSeatMapper {
         Showtime showtime = showtimeSeat.getShowtime();
         Seat seat = showtimeSeat.getSeat();
         CinemaRoom cinemaRoom = seat == null ? null : seat.getCinemaRoom();
-        Integer basePrice = showtime == null ? null : TicketPricingService.resolveBasePrice(showtime);
-        Integer surcharge = seat == null ? null : ticketPricingService.resolveConfiguredSeatSurcharge(seat.getType());
+        TicketPriceBreakdown price = showtime == null || seat == null
+                ? null
+                : ticketPricingService.calculatePriceBreakdown(showtime, seat.getType(), false);
 
         return ShowtimeSeatResponse.builder()
                 .showtimeSeatId(showtimeSeat.getShowtimeSeatId())
@@ -38,9 +40,11 @@ public class ShowtimeSeatMapper {
                 .seatNumber(seat == null ? null : seat.getSeatNumber())
                 .seatCode(seat == null ? null : seat.getSeatCode())
                 .seatType(seat == null ? null : seat.getType())
-                .basePrice(basePrice)
-                .seatSurcharge(surcharge)
-                .finalPrice(basePrice == null || surcharge == null ? null : basePrice + surcharge)
+                .basePrice(price == null ? null : price.getBasePrice())
+                .seatSurcharge(price == null ? null : price.getSeatSurcharge())
+                .scheduleAdjustment(price == null ? null : price.getScheduleAdjustment())
+                .finalPrice(price == null ? null : price.getFinalPrice())
+                .appliedPricingRules(price == null ? List.of() : price.getAppliedRules())
                 .showDate(showtime == null ? null : showtime.getShowDate())
                 .startTime(showtime == null ? null : showtime.getStartTime())
                 .endTime(showtime == null ? null : showtime.getEndTime())
