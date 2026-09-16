@@ -33,4 +33,12 @@ export const notificationService = {
   markAllAsRead: async (): Promise<void> => {
     await apiClient.put("/dashboard/notifications/read-all");
   },
+
+  markAsRead: async (notificationId: number): Promise<void> => {
+    await apiClient.put(`/dashboard/notifications/${notificationId}/read`);
+  },
+
+  markAsUnread: async (notificationId: number): Promise<void> => {
+    await apiClient.put(`/dashboard/notifications/${notificationId}/unread`);
+  },
 };

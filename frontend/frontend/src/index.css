@@ -339,6 +339,15 @@ option {
 /* Scrollbar hidden */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+.dashboard-reduced-motion *,
+.dashboard-reduced-motion *::before,
+.dashboard-reduced-motion *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
 /* Staff counter ticket: print the ticket only, never the dashboard chrome. */
 .ticket-print-only {
   display: none;

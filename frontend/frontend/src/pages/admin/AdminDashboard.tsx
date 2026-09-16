@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, type CSSProperties } from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { AdminHeader } from "@/components/dashboard/AdminHeader";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -8,6 +8,7 @@ import {
   canManageDashboardData,
   getFirstAccessibleDashboardPage,
 } from "@/utils/dashboardAccess";
+import { readDashboardPreferences, useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 
 const DashboardContent = lazy(() =>
   import("@/components/dashboard/DashboardContent").then((module) => ({ default: module.DashboardContent }))
@@ -69,6 +70,9 @@ const PromotionManagementPage = lazy(() =>
 const CustomerContactManagementPage = lazy(() =>
   import("@/components/dashboard/CustomerContactManagementPage").then((module) => ({ default: module.CustomerContactManagementPage }))
 );
+const DashboardSettingsPage = lazy(() =>
+  import("@/components/dashboard/DashboardSettingsPage").then((module) => ({ default: module.DashboardSettingsPage }))
+);
 const DASHBOARD_PAGE_LABELS = Object.keys(DASHBOARD_PAGE_ACCESS);
 
 const PlaceholderPage = ({ pageName }: { pageName: string }) => (
@@ -129,8 +133,9 @@ const DashboardPageFallback = () => (
 );
 
 export function AdminDashboard() {
-  const [requestedPage, setRequestedPage] = useState("Tổng quan");
-  const { roles, scopes } = useCurrentUser();
+  const { username, roles, scopes } = useCurrentUser();
+  const { preferences } = useDashboardPreferences(username);
+  const [requestedPage, setRequestedPage] = useState(() => readDashboardPreferences(username).defaultPage);
   const canManage = canManageDashboardData(roles, scopes);
   const activePage = canAccessDashboardPage(requestedPage, roles, scopes)
     ? requestedPage
@@ -186,6 +191,8 @@ export function AdminDashboard() {
         return <PromotionManagementPage />;
       case "Góp ý & phản hồi":
         return <CustomerContactManagementPage />;
+      case "Cài đặt":
+        return <DashboardSettingsPage />;
       default:
         return <PlaceholderPage pageName={activePage} />;
     }
@@ -200,7 +207,9 @@ export function AdminDashboard() {
         minWidth: 1280,
         fontFamily: "Inter, sans-serif",
         overflow: "hidden",
-      }}
+        "--dashboard-accent": preferences.accentColor,
+      } as CSSProperties}
+      className={preferences.reduceMotion ? "dashboard-reduced-motion" : undefined}
     >
       <Sidebar activePage={activePage} onNavigate={setRequestedPage} />
 

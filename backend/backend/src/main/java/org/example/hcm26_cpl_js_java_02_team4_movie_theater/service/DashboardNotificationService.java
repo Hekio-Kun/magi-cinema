@@ -6,6 +6,8 @@ import lombok.experimental.FieldDefaults;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.notification.DashboardNotificationListResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.notification.DashboardNotificationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.DashboardNotification;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.AppException;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.ErrorCode;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.repository.DashboardNotificationRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -45,6 +47,14 @@ public class DashboardNotificationService {
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
     public void markAllAsRead() {
         notificationRepository.findAll().forEach(notification -> notification.setUnread(false));
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
+    public void setReadState(Long notificationId, boolean read) {
+        DashboardNotification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new AppException(ErrorCode.VALIDATION_ERROR, "Không tìm thấy thông báo."));
+        notification.setUnread(!read);
     }
 
     private DashboardNotificationResponse toResponse(DashboardNotification notification) {

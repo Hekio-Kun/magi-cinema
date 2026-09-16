@@ -1,378 +1,205 @@
-import { useState, useEffect } from "react";
-import { Search, Bell, Package, UserPlus, AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { AlertTriangle, Bell, Check, CheckCheck, ChevronRight, Circle, Clock3, Command, History, Layers3, Package, RefreshCw, Search, Settings2, UserPlus, X } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { notificationService, type DashboardNotification } from "@/api/notificationApi";
 import { DASHBOARD_PAGE_ACCESS, canAccessDashboardPage, normalizeRoles } from "@/utils/dashboardAccess";
-import { ChevronRight } from "lucide-react";
 import { useOnlineCount } from "@/hooks/useOnlineTracker";
+import { getDashboardSearchHistoryKey, useDashboardPreferences } from "@/hooks/useDashboardPreferences";
+import { buildDashboardSearchIndex, searchDashboard, type DashboardSearchResult } from "@/utils/dashboardSearch";
 
 const FONT = "'Inter', sans-serif";
-const GOLD = "#f59e0b";
 
 function getNotificationStyle(type: string) {
-  if (type === "STAFF_IMPORT") {
-    return {
-      icon: UserPlus,
-      color: "#059669",
-      bg: "rgba(5,150,105,0.1)",
-    };
-  }
-  if (type === "STOCK") {
-    return {
-      icon: Package,
-      color: "#3b82f6",
-      bg: "rgba(59,130,246,0.1)",
-    };
-  }
-  return {
-    icon: AlertTriangle,
-    color: "#f59e0b",
-    bg: "rgba(245,158,11,0.1)",
-  };
+  if (type === "STAFF_IMPORT") return { icon: UserPlus, color: "#059669", bg: "#ecfdf5", label: "Nhân viên" };
+  if (type === "STOCK") return { icon: Package, color: "#2563eb", bg: "#eff6ff", label: "Kho hàng" };
+  return { icon: AlertTriangle, color: "#d97706", bg: "#fffbeb", label: type || "Hệ thống" };
 }
 
-function formatRelativeTime(value?: string) {
+function formatNotificationTime(value: string | undefined, absolute: boolean) {
   if (!value) return "Vừa xong";
-  const created = new Date(value).getTime();
-  if (Number.isNaN(created)) return "Vừa xong";
-  const diffMs = Date.now() - created;
-  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  const created = new Date(value);
+  if (Number.isNaN(created.getTime())) return "Vừa xong";
+  if (absolute) return new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" }).format(created);
+  const minutes = Math.max(0, Math.floor((Date.now() - created.getTime()) / 60000));
   if (minutes < 1) return "Vừa xong";
   if (minutes < 60) return `${minutes} phút trước`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} giờ trước`;
-  const days = Math.floor(hours / 24);
-  return `${days} ngày trước`;
+  return hours < 24 ? `${hours} giờ trước` : `${Math.floor(hours / 24)} ngày trước`;
 }
 
-interface AdminHeaderProps {
-  activePage?: string;
-  onNavigate?: (page: string) => void;
+function playNotificationSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 740;
+    gain.gain.setValueAtTime(0.06, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.16);
+    oscillator.connect(gain); gain.connect(context.destination);
+    oscillator.start(); oscillator.stop(context.currentTime + 0.16);
+  } catch { /* Optional audio may be blocked before a browser gesture. */ }
 }
+
+interface AdminHeaderProps { activePage?: string; onNavigate?: (page: string) => void; }
 
 export function AdminHeader({ activePage = "Tổng quan", onNavigate }: AdminHeaderProps) {
   const { username, roles, scopes } = useCurrentUser();
+  const { preferences } = useDashboardPreferences(username);
+  const accent = preferences.accentColor;
   const onlineCount = useOnlineCount(1);
-  const canReadNotifications = canAccessDashboardPage("Tổng quan", normalizeRoles(username ? roles : []), username ? scopes : []);
-  const [showNotifs, setShowNotifs] = useState(false);
+  const normalizedRoles = useMemo(() => normalizeRoles(username ? roles : []), [roles, username]);
+  const canReadNotifications = canAccessDashboardPage("Tổng quan", normalizedRoles, username ? scopes : []);
+  const accessiblePages = useMemo(() => Object.keys(DASHBOARD_PAGE_ACCESS).filter((page) => canAccessDashboardPage(page, normalizedRoles, username ? scopes : [])), [normalizedRoles, scopes, username]);
+  const searchIndex = useMemo(() => buildDashboardSearchIndex(accessiblePages), [accessiblePages]);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const notificationBoxRef = useRef<HTMLDivElement>(null);
+  const initializedNotifications = useRef(false);
+  const previousUnreadIds = useRef<Set<number>>(new Set());
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+  const [recentSearches, setRecentSearches] = useState<DashboardSearchResult[]>(() => {
+    try { const raw = localStorage.getItem(getDashboardSearchHistoryKey(username)); return raw ? JSON.parse(raw) : []; }
+    catch { return []; }
+  });
+  const [showNotifs, setShowNotifs] = useState(false);
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const shownNotifications = canReadNotifications ? notifications : [];
-  const shownUnreadCount = canReadNotifications ? unreadCount : 0;
+  const [notificationFilter, setNotificationFilter] = useState<"all" | "unread">(preferences.notificationUnreadOnly ? "unread" : "all");
+  const [notificationType, setNotificationType] = useState("ALL");
+  const [notificationSearch, setNotificationSearch] = useState("");
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
 
-  const accessiblePages = Object.keys(DASHBOARD_PAGE_ACCESS).filter((page) =>
-    canAccessDashboardPage(page, normalizeRoles(username ? roles : []), username ? scopes : [])
-  );
-  
-  const searchResults = search.trim() ? accessiblePages.filter(p => p.toLowerCase().includes(search.toLowerCase())) : [];
+  const searchResults = useMemo(() => searchDashboard(searchIndex, search, preferences.maxSearchResults), [preferences.maxSearchResults, search, searchIndex]);
+  const visibleSearchResults = search.trim() ? searchResults : preferences.showSearchHistory ? recentSearches.slice(0, 5) : [];
+  const notificationTypes = useMemo(() => Array.from(new Set(notifications.map((item) => item.type).filter(Boolean))), [notifications]);
+  const filteredNotifications = useMemo(() => {
+    const query = notificationSearch.trim().toLocaleLowerCase("vi");
+    return notifications.filter((item) => {
+      if (notificationFilter === "unread" && !item.unread) return false;
+      if (notificationType !== "ALL" && item.type !== notificationType) return false;
+      return !query || `${item.title} ${item.description}`.toLocaleLowerCase("vi").includes(query);
+    });
+  }, [notificationFilter, notificationSearch, notificationType, notifications]);
 
   useEffect(() => {
-    if (!canReadNotifications) {
-      return undefined;
-    }
-
-    let active = true;
-    const fetchNotifications = () => {
-      notificationService.getDashboardNotifications(10)
-        .then((data) => {
-          if (!active) return;
-          setNotifications(data.notifications || []);
-          setUnreadCount(data.unreadCount || 0);
-        })
-        .catch(() => {
-          if (!active) return;
-          setNotifications([]);
-          setUnreadCount(0);
-        });
+    const closePanels = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!searchBoxRef.current?.contains(target)) setSearchFocused(false);
+      if (!notificationBoxRef.current?.contains(target)) setShowNotifs(false);
     };
+    document.addEventListener("mousedown", closePanels);
+    return () => document.removeEventListener("mousedown", closePanels);
+  }, []);
 
-    fetchNotifications();
-    const timer = window.setInterval(fetchNotifications, 30000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
+  useEffect(() => {
+    if (!preferences.enableSearchShortcut) return;
+    const focusSearch = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault(); searchInputRef.current?.focus(); setSearchFocused(true);
+      }
     };
-  }, [canReadNotifications]);
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, [preferences.enableSearchShortcut]);
 
-  const handleMarkAllAsRead = async () => {
+  const fetchNotifications = useCallback(async (silent = false) => {
     if (!canReadNotifications) return;
+    if (!silent) setNotificationLoading(true);
     try {
-      await notificationService.markAllAsRead();
-      setUnreadCount(0);
-      setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })));
-    } catch {
-      // Header notifications should not interrupt dashboard workflows.
+      const data = await notificationService.getDashboardNotifications(50);
+      const nextNotifications = data.notifications || [];
+      const nextUnread = nextNotifications.filter((item) => item.unread);
+      if (initializedNotifications.current) {
+        const newItems = nextUnread.filter((item) => !previousUnreadIds.current.has(item.notificationId));
+        if (newItems.length) {
+          if (preferences.notificationSound) playNotificationSound();
+          if (preferences.desktopNotifications && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(newItems[0].title, { body: newItems[0].description, tag: `magi-${newItems[0].notificationId}` });
+        }
+      }
+      previousUnreadIds.current = new Set(nextUnread.map((item) => item.notificationId));
+      initializedNotifications.current = true;
+      setNotifications(nextNotifications); setUnreadCount(data.unreadCount || 0); setNotificationError("");
+    } catch { setNotificationError("Không thể đồng bộ thông báo lúc này."); }
+    finally { if (!silent) setNotificationLoading(false); }
+  }, [canReadNotifications, preferences.desktopNotifications, preferences.notificationSound]);
+
+  useEffect(() => {
+    if (!canReadNotifications) return;
+    const initialTimer = window.setTimeout(() => void fetchNotifications(true), 0);
+    if (preferences.notificationRefreshSeconds <= 0) return () => window.clearTimeout(initialTimer);
+    const timer = window.setInterval(() => void fetchNotifications(true), preferences.notificationRefreshSeconds * 1000);
+    return () => { window.clearTimeout(initialTimer); window.clearInterval(timer); };
+  }, [canReadNotifications, fetchNotifications, preferences.notificationRefreshSeconds]);
+
+  const selectSearchResult = (result: DashboardSearchResult) => {
+    onNavigate?.(result.page);
+    const next = [result, ...recentSearches.filter((item) => item.id !== result.id)].slice(0, 5);
+    setRecentSearches(next); localStorage.setItem(getDashboardSearchHistoryKey(username), JSON.stringify(next));
+    setSearch(""); setSearchFocused(false);
+  };
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") { setSearchFocused(false); searchInputRef.current?.blur(); return; }
+    if (!visibleSearchResults.length) return;
+    if (event.key === "ArrowDown") { event.preventDefault(); setActiveSearchIndex((value) => (value + 1) % visibleSearchResults.length); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); setActiveSearchIndex((value) => (value - 1 + visibleSearchResults.length) % visibleSearchResults.length); }
+    else if (event.key === "Enter") { event.preventDefault(); selectSearchResult(visibleSearchResults[activeSearchIndex] || visibleSearchResults[0]); }
+  };
+  const handleMarkAllAsRead = async () => {
+    if (!canReadNotifications || !unreadCount) return;
+    try { await notificationService.markAllAsRead(); setUnreadCount(0); setNotifications((previous) => previous.map((item) => ({ ...item, unread: false }))); previousUnreadIds.current = new Set(); }
+    catch { setNotificationError("Không thể cập nhật trạng thái thông báo."); }
+  };
+  const toggleNotificationRead = async (notification: DashboardNotification) => {
+    const nextUnread = !notification.unread;
+    setNotifications((previous) => previous.map((item) => item.notificationId === notification.notificationId ? { ...item, unread: nextUnread } : item));
+    setUnreadCount((value) => Math.max(0, value + (nextUnread ? 1 : -1)));
+    try { if (notification.unread) await notificationService.markAsRead(notification.notificationId); else await notificationService.markAsUnread(notification.notificationId); }
+    catch {
+      setNotifications((previous) => previous.map((item) => item.notificationId === notification.notificationId ? notification : item));
+      setUnreadCount((value) => Math.max(0, value + (nextUnread ? -1 : 1))); setNotificationError("Không thể cập nhật trạng thái thông báo.");
     }
   };
+  const panelShadow = "0 18px 45px rgba(15,23,42,.16)";
 
   return (
-    <header
-      style={{
-        height: 72,
-        background: "#FFFFFF",
-        borderBottom: "1px solid #E5E7EB",
-        display: "flex",
-        alignItems: "center",
-        paddingLeft: 24,
-        paddingRight: 24,
-        gap: 20,
-        fontFamily: FONT,
-        flexShrink: 0,
-        position: "sticky",
-        top: 0,
-        zIndex: 30,
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ color: "#1A1A2E", fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em" }}>
-          {activePage}
-        </div>
-        <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 500 }}>
-          Hệ thống quản lý Magi Cinema
-        </div>
-      </div>
+    <header style={{ height: preferences.compactHeader ? 60 : 72, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 24px", gap: 20, fontFamily: FONT, flexShrink: 0, position: "sticky", top: 0, zIndex: 30, transition: preferences.reduceMotion ? "none" : "height .2s" }}>
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 170 }}><div style={{ color: "#0f172a", fontSize: 16, fontWeight: 750, letterSpacing: "-.01em" }}>{activePage}</div>{!preferences.compactHeader && <div style={{ fontSize: 11, color: "#64748b", fontWeight: 500, marginTop: 2 }}>Hệ thống quản lý Magi Cinema</div>}</div>
 
-      <div style={{ flex: 1 }} />
-
-      {/* Search */}
-      <div
-        style={{
-          width: 360,
-          height: 40,
-          borderRadius: 10,
-          border: "1px solid #E2E8F0",
-          background: "#F8FAFC",
-          display: "flex",
-          alignItems: "center",
-          paddingLeft: 14,
-          paddingRight: 14,
-          gap: 10,
-          transition: "all 0.2s",
-        }}
-        onFocusCapture={(e) => {
-          e.currentTarget.style.borderColor = GOLD;
-          e.currentTarget.style.boxShadow = `0 0 0 3px rgba(245,158,11,0.12)`;
-          e.currentTarget.style.background = "#fff";
-          setSearchFocused(true);
-        }}
-        onBlurCapture={(e) => {
-          e.currentTarget.style.borderColor = "#E2E8F0";
-          e.currentTarget.style.boxShadow = "none";
-          e.currentTarget.style.background = "#F8FAFC";
-          // Delay hiding dropdown so click events can fire
-          setTimeout(() => setSearchFocused(false), 200);
-        }}
-      >
-        <Search size={16} color="#94A3B8" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm phim, đặt vé, khách hàng..."
-          style={{
-            flex: 1,
-            border: "none",
-            background: "transparent",
-            outline: "none",
-            fontSize: 13,
-            color: "#1E293B",
-          }}
-        />
-
-        {/* Global Search Dropdown */}
-        {searchFocused && search.trim() !== "" && (
-          <div style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: 8,
-            background: "#fff",
-            borderRadius: 12,
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
-            border: "1px solid #E2E8F0",
-            zIndex: 100,
-            maxHeight: 300,
-            overflowY: "auto",
-            overflowX: "hidden",
-            padding: "8px 0"
-          }}>
-            {searchResults.length > 0 ? (
-              searchResults.map((page) => (
-                <div
-                  key={page}
-                  onClick={() => {
-                    if (onNavigate) onNavigate(page);
-                    setSearch("");
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#F8FAFC"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                  style={{
-                    padding: "10px 16px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    transition: "background 0.2s"
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "#1E293B" }}>{page}</span>
-                  <ChevronRight size={14} color="#94A3B8" />
-                </div>
-              ))
-            ) : (
-              <div style={{ padding: "12px 16px", textAlign: "center", fontSize: 13, color: "#64748B" }}>
-                Không tìm thấy kết quả.
-              </div>
-            )}
+      <div ref={searchBoxRef} style={{ width: 430, height: 40, borderRadius: 10, border: `1px solid ${searchFocused ? accent : "#e2e8f0"}`, background: searchFocused ? "#fff" : "#f8fafc", display: "flex", alignItems: "center", padding: "0 12px", gap: 9, boxShadow: searchFocused ? `0 0 0 3px ${accent}1f` : "none", position: "relative", transition: "all .18s" }}>
+        <Search size={16} color={searchFocused ? accent : "#94a3b8"} />
+        <input ref={searchInputRef} value={search} onChange={(event) => { setSearch(event.target.value); setActiveSearchIndex(0); }} onFocus={() => setSearchFocused(true)} onKeyDown={handleSearchKeyDown} placeholder="Tìm chức năng hoặc nghiệp vụ..." aria-label="Tìm kiếm trong dashboard" style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 13, color: "#1e293b" }} />
+        {search ? <button type="button" aria-label="Xóa từ khóa" onClick={() => { setSearch(""); searchInputRef.current?.focus(); }} style={{ border: 0, background: "none", padding: 2, cursor: "pointer", color: "#94a3b8" }}><X size={14} /></button> : preferences.enableSearchShortcut && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", borderRadius: 6, padding: "3px 6px", fontSize: 10, fontWeight: 700 }}><Command size={10} />K</span>}
+        {searchFocused && (search.trim() || (preferences.showSearchHistory && recentSearches.length > 0)) && <div style={{ position: "absolute", top: "calc(100% + 9px)", left: 0, right: 0, background: "#fff", borderRadius: 13, boxShadow: panelShadow, border: "1px solid #e2e8f0", zIndex: 100, overflow: "hidden" }}>
+          <div style={{ padding: "10px 13px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", color: "#64748b", fontSize: 10, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase" }}><span style={{ display: "flex", alignItems: "center", gap: 6 }}>{search.trim() ? <Layers3 size={13} /> : <History size={13} />}{search.trim() ? `${searchResults.length} kết quả` : "Mở gần đây"}</span><span>↑↓ chọn · Enter mở</span></div>
+          <div style={{ maxHeight: 370, overflowY: "auto", padding: 6 }}>
+            {visibleSearchResults.length ? visibleSearchResults.map((result, index) => <button key={result.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectSearchResult(result)} onMouseEnter={() => setActiveSearchIndex(index)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, border: 0, borderRadius: 9, padding: "10px 9px", textAlign: "left", cursor: "pointer", background: index === activeSearchIndex ? `${accent}12` : "transparent" }}><div style={{ width: 33, height: 33, borderRadius: 9, background: result.type === "action" ? `${accent}18` : "#f1f5f9", color: result.type === "action" ? accent : "#64748b", display: "grid", placeItems: "center", flexShrink: 0 }}>{result.type === "action" ? <Command size={15} /> : <Layers3 size={15} />}</div><div style={{ minWidth: 0, flex: 1 }}><div style={{ color: "#1e293b", fontSize: 12, fontWeight: 700 }}>{result.title}</div><div style={{ color: "#64748b", fontSize: 10.5, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{result.description}</div></div><span style={{ color: "#94a3b8", fontSize: 10, whiteSpace: "nowrap" }}>{result.type === "action" ? result.page : "Trang"}</span><ChevronRight size={14} color="#94a3b8" /></button>) : <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748b", fontSize: 12 }}>Không tìm thấy. Thử “bán vé”, “dòng tiền” hoặc “phân quyền”.</div>}
           </div>
-        )}
+        </div>}
       </div>
 
       <div style={{ flex: 1 }} />
-
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        {/* Real-time Online Users Badge */}
-        <div
-          title="Số người dùng đang truy cập hệ thống Magi Cinema theo thời gian thực"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "6px 14px",
-            borderRadius: 20,
-            background: "#ECFDF5",
-            border: "1px solid #A7F3D0",
-            fontSize: 12,
-            fontWeight: 600,
-            color: "#065F46",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-            cursor: "default",
-          }}
-        >
-          <span
-            style={{
-              position: "relative",
-              display: "inline-flex",
-              height: 8,
-              width: 8,
-            }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                display: "inline-flex",
-                height: "100%",
-                width: "100%",
-                borderRadius: "50%",
-                background: "#10B981",
-                opacity: 0.75,
-                animation: "ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite",
-              }}
-            />
-            <span
-              style={{
-                position: "relative",
-                display: "inline-flex",
-                borderRadius: "50%",
-                height: 8,
-                width: 8,
-                background: "#059669",
-              }}
-            />
-          </span>
-          <span>{onlineCount} trực tuyến</span>
-        </div>
-
-        {/* Notifications */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowNotifs(!showNotifs)}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              border: "1px solid #E2E8F0",
-              background: showNotifs ? "rgba(245,158,11,0.1)" : "#F8FAFC",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s",
-            }}
-          >
-            <Bell size={18} color={showNotifs ? GOLD : "#64748B"} />
-            {shownUnreadCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -2,
-                  right: -2,
-                  width: 18,
-                  height: 18,
-                  background: "#EF4444",
-                  borderRadius: "50%",
-                  border: "2px solid #fff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  fontSize: 9,
-                  fontWeight: 800,
-                }}
-              >
-                {shownUnreadCount}
-              </span>
-            )}
-          </button>
-
-          {showNotifs && (
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: 50,
-                width: 320,
-                background: "#fff",
-                border: "1px solid #E2E8F0",
-                borderRadius: 12,
-                boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                zIndex: 100,
-                overflow: "hidden",
-              }}
-            >
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>Thông báo</span>
-                <button type="button" onClick={handleMarkAllAsRead} style={{ border: "none", background: "transparent", fontSize: 11, color: GOLD, fontWeight: 600, cursor: "pointer" }}>Đánh dấu đã đọc</button>
-              </div>
-              <div style={{ maxHeight: 300, overflowY: "auto" }}>
-                {shownNotifications.length === 0 ? (
-                  <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748B", fontSize: 12, fontWeight: 600 }}>
-                    Chưa có thông báo mới
-                  </div>
-                ) : shownNotifications.map(n => {
-                  const itemStyle = getNotificationStyle(n.type);
-                  const Icon = itemStyle.icon;
-                  return (
-                  <div key={n.notificationId} style={{ padding: "12px 16px", borderBottom: "1px solid #F8FAFC", background: n.unread ? "#FEFCE8" : "#fff", display: "flex", gap: 12 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: itemStyle.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                       <Icon size={14} color={itemStyle.color} style={{ margin: "auto" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#1E293B" }}>{n.title}</div>
-                      <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{n.description}</div>
-                      <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4 }}>{formatRelativeTime(n.createdAt)}</div>
-                    </div>
-                  </div>
-                )})}
-              </div>
-              <div style={{ padding: 10, textAlign: "center", background: "#F8FAFC", cursor: "pointer" }}>
-                 <span style={{ fontSize: 12, fontWeight: 600, color: GOLD }}>Xem tất cả</span>
-              </div>
-            </div>
-          )}
-        </div>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 20, background: "#ecfdf5", border: "1px solid #a7f3d0", fontSize: 11, fontWeight: 700, color: "#047857" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 0 4px #d1fae5" }} />{onlineCount} trực tuyến</div>
+      <div ref={notificationBoxRef} style={{ position: "relative" }}>
+        <button type="button" aria-label={`Thông báo, ${unreadCount} chưa đọc`} onClick={() => { setShowNotifs((value) => !value); setNotificationFilter(preferences.notificationUnreadOnly ? "unread" : "all"); }} style={{ width: 40, height: 40, borderRadius: 10, border: `1px solid ${showNotifs ? `${accent}55` : "#e2e8f0"}`, background: showNotifs ? `${accent}12` : "#f8fafc", cursor: "pointer", display: "grid", placeItems: "center", position: "relative" }}><Bell size={18} color={showNotifs ? accent : "#64748b"} />{unreadCount > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 19, height: 19, padding: "0 4px", background: "#ef4444", borderRadius: 10, border: "2px solid #fff", display: "grid", placeItems: "center", color: "#fff", fontSize: 9, fontWeight: 800 }}>{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>
+        {showNotifs && <div style={{ position: "absolute", right: 0, top: 50, width: 430, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, boxShadow: panelShadow, zIndex: 100, overflow: "hidden" }}>
+          <div style={{ padding: "14px 16px 11px", borderBottom: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a" }}>Trung tâm thông báo</div><div style={{ fontSize: 10.5, color: "#64748b", marginTop: 2 }}>{unreadCount} mục chưa đọc · 50 mục gần nhất</div></div><div style={{ display: "flex", gap: 4 }}><button type="button" title="Làm mới" onClick={() => void fetchNotifications()} disabled={notificationLoading} style={{ border: 0, background: "#f8fafc", color: "#64748b", borderRadius: 8, width: 32, height: 32, cursor: "pointer" }}><RefreshCw size={15} style={{ margin: "auto", animation: notificationLoading ? "spin 1s linear infinite" : "none" }} /></button><button type="button" title="Cài đặt thông báo" onClick={() => { onNavigate?.("Cài đặt"); setShowNotifs(false); }} style={{ border: 0, background: "#f8fafc", color: "#64748b", borderRadius: 8, width: 32, height: 32, cursor: "pointer" }}><Settings2 size={15} style={{ margin: "auto" }} /></button></div></div>
+            <div style={{ display: "flex", gap: 7, marginTop: 12 }}>{(["all", "unread"] as const).map((filter) => <button key={filter} type="button" onClick={() => setNotificationFilter(filter)} style={{ border: notificationFilter === filter ? `1px solid ${accent}66` : "1px solid #e2e8f0", color: notificationFilter === filter ? accent : "#64748b", background: notificationFilter === filter ? `${accent}12` : "#fff", borderRadius: 8, height: 30, padding: "0 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>{filter === "all" ? "Tất cả" : `Chưa đọc (${unreadCount})`}</button>)}<button type="button" onClick={handleMarkAllAsRead} disabled={!unreadCount} style={{ marginLeft: "auto", border: 0, background: "transparent", color: unreadCount ? accent : "#cbd5e1", cursor: unreadCount ? "pointer" : "default", fontSize: 10.5, fontWeight: 700, display: "flex", gap: 5, alignItems: "center" }}><CheckCheck size={14} />Đọc tất cả</button></div>
+            <div style={{ display: "flex", gap: 7, marginTop: 9 }}><div style={{ flex: 1, height: 32, border: "1px solid #e2e8f0", background: "#f8fafc", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, padding: "0 9px" }}><Search size={13} color="#94a3b8" /><input value={notificationSearch} onChange={(event) => setNotificationSearch(event.target.value)} placeholder="Tìm trong thông báo" style={{ minWidth: 0, flex: 1, border: 0, outline: 0, background: "transparent", fontSize: 11, color: "#334155" }} /></div><select value={notificationType} onChange={(event) => setNotificationType(event.target.value)} style={{ width: 112, height: 32, border: "1px solid #e2e8f0", borderRadius: 8, color: "#475569", background: "#fff", fontSize: 10.5, padding: "0 6px" }}><option value="ALL">Mọi loại</option>{notificationTypes.map((type) => <option key={type} value={type}>{getNotificationStyle(type).label}</option>)}</select></div>
+            {notificationError && <div style={{ color: "#b91c1c", background: "#fef2f2", borderRadius: 7, padding: "7px 9px", fontSize: 10.5, marginTop: 8 }}>{notificationError}</div>}
+          </div>
+          <div style={{ maxHeight: 390, overflowY: "auto" }}>{!filteredNotifications.length ? <div style={{ padding: "38px 20px", textAlign: "center", color: "#64748b" }}><Bell size={24} color="#cbd5e1" style={{ margin: "0 auto 8px" }} /><div style={{ fontSize: 12, fontWeight: 700 }}>{notificationLoading ? "Đang đồng bộ..." : "Không có thông báo phù hợp"}</div></div> : filteredNotifications.map((notification) => {
+            const itemStyle = getNotificationStyle(notification.type); const Icon = itemStyle.icon;
+            return <div key={notification.notificationId} style={{ padding: "12px 14px", borderBottom: "1px solid #f1f5f9", background: notification.unread ? `${accent}09` : "#fff", display: "flex", gap: 11 }}><div style={{ width: 34, height: 34, borderRadius: 9, background: itemStyle.bg, display: "grid", placeItems: "center", flexShrink: 0 }}><Icon size={15} color={itemStyle.color} /></div><div style={{ minWidth: 0, flex: 1 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ fontSize: 12, fontWeight: notification.unread ? 800 : 650, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{notification.title}</div>{notification.unread && <Circle size={7} fill={accent} color={accent} />}</div><div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3, lineHeight: 1.45 }}>{notification.description}</div><div style={{ fontSize: 9.5, color: "#94a3b8", marginTop: 5, display: "flex", alignItems: "center", gap: 4 }}><Clock3 size={10} />{formatNotificationTime(notification.createdAt, preferences.notificationTimeFormat === "absolute")}</div></div><button type="button" title={notification.unread ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"} onClick={() => void toggleNotificationRead(notification)} style={{ width: 28, height: 28, flexShrink: 0, border: 0, borderRadius: 7, background: "transparent", color: notification.unread ? accent : "#94a3b8", cursor: "pointer" }}>{notification.unread ? <Check size={14} style={{ margin: "auto" }} /> : <Circle size={13} style={{ margin: "auto" }} />}</button></div>;
+          })}</div>
+          <button type="button" onClick={() => { onNavigate?.("Cài đặt"); setShowNotifs(false); }} style={{ width: "100%", height: 40, border: 0, borderTop: "1px solid #e2e8f0", background: "#f8fafc", color: accent, cursor: "pointer", fontSize: 11, fontWeight: 800 }}>Tùy chỉnh thông báo</button>
+        </div>}
       </div>
     </header>
   );

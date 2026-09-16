@@ -46,7 +46,7 @@ export const DASHBOARD_PAGE_ACCESS: Record<string, DashboardRole[]> = {
   "Góp ý & phản hồi": ["ADMIN", "MANAGER"],
   "Nhân viên": ["ADMIN"],
   "Vai trò & quyền hạn": ["ADMIN"],
-  "Cài đặt": ["ADMIN"],
+  "Cài đặt": ["ADMIN", "MANAGER", "STAFF"],
 };
 
 export const DASHBOARD_PAGE_PERMISSION_ACCESS: Record<string, string[]> = {

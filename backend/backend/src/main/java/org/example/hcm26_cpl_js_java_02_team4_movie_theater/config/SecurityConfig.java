@@ -128,7 +128,9 @@ public class SecurityConfig {
                                 "/dashboard/online-users",
                                 "/dashboard/notifications").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         .requestMatchers(HttpMethod.PUT,
-                                "/dashboard/notifications/read-all").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                                "/dashboard/notifications/read-all",
+                                "/dashboard/notifications/*/read",
+                                "/dashboard/notifications/*/unread").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         .requestMatchers(HttpMethod.GET,
                                 "/combos/admin",
                                 "/food-items/admin",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const buildPresenceWebSocketUrl = () => {
   const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
@@ -144,20 +144,13 @@ export function useOnlineTracker() {
  * Hook to consume the current real-time online count in components (e.g., Admin Dashboard).
  */
 export function useOnlineCount(initialFallback = 1) {
-  const [count, setCount] = useState<number>(currentOnlineCount || initialFallback);
-
-  useEffect(() => {
-    const listener: Listener = (newCount) => {
-      setCount(newCount);
-    };
-    listeners.add(listener);
-    // Sync current value immediately
-    setCount(currentOnlineCount);
-
-    return () => {
-      listeners.delete(listener);
-    };
-  }, []);
-
-  return count;
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      const listener: Listener = () => onStoreChange();
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    () => currentOnlineCount || initialFallback,
+    () => initialFallback,
+  );
 }

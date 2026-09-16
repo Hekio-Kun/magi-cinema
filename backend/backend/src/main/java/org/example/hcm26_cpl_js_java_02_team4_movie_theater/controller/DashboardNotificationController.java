@@ -30,4 +30,16 @@ public class DashboardNotificationController {
                 .message("Đã đánh dấu tất cả thông báo là đã đọc.")
                 .build();
     }
+
+    @PutMapping("/{notificationId}/read")
+    public ApiResponse<Void> markAsRead(@PathVariable Long notificationId) {
+        notificationService.setReadState(notificationId, true);
+        return ApiResponse.<Void>builder().message("Đã đánh dấu thông báo là đã đọc.").build();
+    }
+
+    @PutMapping("/{notificationId}/unread")
+    public ApiResponse<Void> markAsUnread(@PathVariable Long notificationId) {
+        notificationService.setReadState(notificationId, false);
+        return ApiResponse.<Void>builder().message("Đã đánh dấu thông báo là chưa đọc.").build();
+    }
 }

@@ -27,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import { authService } from "@/api/authApi";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccessDashboardPage } from "@/utils/dashboardAccess";
+import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 
 const NAV_GROUPS = [
   {
@@ -82,6 +83,9 @@ interface SidebarProps {
 export function Sidebar({ activePage, onNavigate }: SidebarProps) {
   const navigate = useNavigate();
   const { username, initials, roleLabel, roles, scopes, avatarUrl } = useCurrentUser();
+  const { preferences } = useDashboardPreferences(username);
+  const compact = preferences.compactSidebar;
+  const accent = preferences.accentColor;
   const visibleGroups = NAV_GROUPS
     .map((group) => ({
       ...group,
@@ -105,13 +109,19 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
 
   return (
     <aside
-      style={{ width: 240, minWidth: 240, background: "#111318", fontFamily: "Inter, sans-serif" }}
+      style={{
+        width: compact ? 76 : 240,
+        minWidth: compact ? 76 : 240,
+        background: "#111318",
+        fontFamily: "Inter, sans-serif",
+        transition: preferences.reduceMotion ? "none" : "width 0.2s ease, min-width 0.2s ease",
+      }}
       className="flex flex-col h-full"
     >
       {/* Logo */}
       <div
-        className="flex items-center gap-3 px-5 py-5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        className="flex items-center gap-3 py-5"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", paddingLeft: compact ? 20 : 20, paddingRight: compact ? 20 : 20 }}
       >
         <div
           style={{ width: 36, height: 36, background: "linear-gradient(135deg, #4B5563, #374151)", borderRadius: 12, boxShadow: "0 4px 12px rgba(75,85,99,0.3)" }}
@@ -119,19 +129,19 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
         >
           <Film size={18} color="#fff" />
         </div>
-        <div>
+        {!compact && <div>
           <div style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em" }}>
             Magi <span style={{ color: "#9CA3AF" }}>Cinema</span>
           </div>
           <div style={{ color: "#8A8A9A", fontSize: 11 }}>Hệ thống quản lý</div>
-        </div>
+        </div>}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 overflow-y-auto no-scrollbar" style={{ paddingLeft: 12, paddingRight: 12 }}>
+      <nav className="flex-1 py-4 overflow-y-auto no-scrollbar" style={{ paddingLeft: compact ? 10 : 12, paddingRight: compact ? 10 : 12 }}>
         {visibleGroups.map((group, groupIdx) => (
           <div key={group.group} style={{ marginBottom: groupIdx === visibleGroups.length - 1 ? 0 : 20 }}>
-            <div
+            {!compact && <div
               style={{
                 fontSize: 11,
                 fontWeight: 600,
@@ -142,7 +152,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
               }}
             >
               {group.group}
-            </div>
+            </div>}
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {group.items.map(({ icon: Icon, label }) => {
                 const active = activePage === label;
@@ -150,18 +160,21 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
                   <button
                     key={label}
                     onClick={() => onNavigate(label)}
+                    title={compact ? label : undefined}
+                    aria-label={label}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 12,
+                      gap: compact ? 0 : 12,
                       width: "100%",
                       height: 42,
-                      paddingLeft: 12,
-                      paddingRight: 12,
+                      paddingLeft: compact ? 0 : 12,
+                      paddingRight: compact ? 0 : 12,
+                      justifyContent: compact ? "center" : "flex-start",
                       border: "none",
                       borderRadius: 8,
                       cursor: "pointer",
-                      background: active ? "#f59e0b" : "transparent",
+                      background: active ? accent : "transparent",
                       color: active ? "#FFFFFF" : "#8A8A9A",
                       fontSize: 14,
                       fontWeight: active ? 600 : 500,
@@ -170,8 +183,8 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
-                        e.currentTarget.style.background = "rgba(245,158,11,0.08)";
-                        e.currentTarget.style.color = "#f59e0b";
+                        e.currentTarget.style.background = `${accent}18`;
+                        e.currentTarget.style.color = accent;
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -182,9 +195,9 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
                     }}
                   >
                     <Icon size={18} style={{ flexShrink: 0, opacity: active ? 1 : 0.8 }} />
-                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {!compact && <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {label}
-                    </span>
+                    </span>}
                   </button>
                 );
               })}
@@ -195,15 +208,15 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
 
       {/* User + Logout */}
       <div
-        className="flex items-center gap-3 px-4 py-4"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+        className="flex items-center gap-3 py-4"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingLeft: compact ? 14 : 16, paddingRight: compact ? 14 : 16, justifyContent: compact ? "center" : "flex-start" }}
       >
-        <div
+        {!compact && <div
           style={{
             width: 36,
             height: 36,
             borderRadius: "50%",
-            background: "linear-gradient(135deg, #f59e0b, #d97706)",
+            background: `linear-gradient(135deg, ${accent}, #b45309)`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -224,14 +237,14 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           ) : (
             initials
           )}
-        </div>
-        <div className="flex-1 min-w-0">
+        </div>}
+        {!compact && <div className="flex-1 min-w-0">
           <div style={{ color: "#FFFFFF", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {username}
           </div>
           <div style={{ color: "#8A8A9A", fontSize: 11 }}>{roleLabel}</div>
-        </div>
-        <button
+        </div>}
+        {!compact && <button
           onClick={() => navigate("/")}
           title="Trang chủ"
           style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 6, color: "#8A8A9A", transition: "color 0.15s" }}
@@ -239,12 +252,12 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           onMouseLeave={(e) => (e.currentTarget.style.color = "#8A8A9A")}
         >
           <Home size={16} />
-        </button>
+        </button>}
         <button
           onClick={handleLogout}
           title="Đăng xuất"
           style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 6, color: "#8A8A9A", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#f59e0b")}
+          onMouseEnter={(e) => (e.currentTarget.style.color = accent)}
           onMouseLeave={(e) => (e.currentTarget.style.color = "#8A8A9A")}
         >
           <LogOut size={16} />
