@@ -5,14 +5,13 @@ import lombok.experimental.FieldDefaults;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ContactSubmitResponse {
-    Boolean success;
-    String message;
-    AiModerationResult aiModerationResult;
-    String ticketCode;
-    String status;
-    String dueAt;
+public class ContactReplyResponse {
+    Long replyId;
+    String replyMessage;
+    String staffName;
+    Boolean emailDelivered;
+    String createdAt;
 }

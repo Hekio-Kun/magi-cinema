@@ -1,12 +1,11 @@
 package org.example.hcm26_cpl_js_java_02_team4_movie_theater.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
-import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.contact.ContactReplyRequest;
-import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.contact.ContactResponse;
-import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.contact.ContactSubmitRequest;
-import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.contact.ContactSubmitResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.contact.*;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.ContactService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -31,6 +30,17 @@ public class ContactController {
                 .build();
     }
 
+    @GetMapping("/track")
+    public ApiResponse<ContactTrackingResponse> trackContact(
+            @RequestParam @NotBlank String ticketCode,
+            @RequestParam @NotBlank @Email String email) {
+        return ApiResponse.<ContactTrackingResponse>builder()
+                .code(200)
+                .message("Success")
+                .result(contactService.trackContact(ticketCode, email))
+                .build();
+    }
+
     @PreAuthorize("hasAuthority('CONTACT_MANAGE')")
     @GetMapping("/admin/list")
     public ApiResponse<List<ContactResponse>> getAllContacts() {
@@ -38,6 +48,28 @@ public class ContactController {
                 .code(200)
                 .message("Success")
                 .result(contactService.getAllContacts())
+                .build();
+    }
+
+    @PreAuthorize("hasAuthority('CONTACT_MANAGE')")
+    @GetMapping("/admin/analytics")
+    public ApiResponse<ContactAnalyticsResponse> getAnalytics() {
+        return ApiResponse.<ContactAnalyticsResponse>builder()
+                .code(200)
+                .message("Success")
+                .result(contactService.getAnalytics())
+                .build();
+    }
+
+    @PreAuthorize("hasAuthority('CONTACT_MANAGE')")
+    @PatchMapping("/admin/{contactId}")
+    public ApiResponse<ContactResponse> updateContact(
+            @PathVariable Long contactId,
+            @Valid @RequestBody ContactUpdateRequest request) {
+        return ApiResponse.<ContactResponse>builder()
+                .code(200)
+                .message("Cập nhật yêu cầu thành công")
+                .result(contactService.updateContact(contactId, request))
                 .build();
     }
 
@@ -59,7 +91,17 @@ public class ContactController {
         contactService.deleteContact(contactId);
         return ApiResponse.<String>builder()
                 .code(200)
-                .message("Xóa góp ý thành công")
+                .message("Lưu trữ góp ý thành công")
+                .build();
+    }
+
+    @PreAuthorize("hasAuthority('CONTACT_MANAGE')")
+    @PatchMapping("/admin/{contactId}/restore")
+    public ApiResponse<ContactResponse> restoreContact(@PathVariable Long contactId) {
+        return ApiResponse.<ContactResponse>builder()
+                .code(200)
+                .message("Khôi phục góp ý thành công")
+                .result(contactService.restoreContact(contactId))
                 .build();
     }
 }

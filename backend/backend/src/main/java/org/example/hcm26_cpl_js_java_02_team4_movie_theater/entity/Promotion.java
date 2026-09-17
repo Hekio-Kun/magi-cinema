@@ -22,6 +22,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BirthdayRule;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingChannel;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.LeapDayPolicy;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PaymentMethod;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PromotionDiscountType;
@@ -82,6 +83,28 @@ public class Promotion {
 
     @Column(name = "min_order_amount")
     Integer minOrderAmount;
+
+    @Column(name = "budget_limit")
+    Integer budgetLimit;
+
+    @Builder.Default
+    @Column(name = "public_visible", nullable = false, columnDefinition = "boolean default true")
+    Boolean publicVisible = true;
+
+    @Builder.Default
+    @Column(name = "priority", nullable = false, columnDefinition = "integer default 0")
+    Integer priority = 0;
+
+    @Column(name = "terms_and_conditions", length = 2000)
+    String termsAndConditions;
+
+    @Builder.Default
+    @Column(name = "online_enabled", nullable = false, columnDefinition = "boolean default true")
+    Boolean onlineEnabled = true;
+
+    @Builder.Default
+    @Column(name = "counter_enabled", nullable = false, columnDefinition = "boolean default true")
+    Boolean counterEnabled = true;
 
     @Column(name = "start_at", nullable = false)
     LocalDateTime startAt;
@@ -163,4 +186,15 @@ public class Promotion {
 
     @Column(name = "deactivated_at")
     LocalDateTime deactivatedAt;
+
+    public Set<BookingChannel> getApplicableChannels() {
+        Set<BookingChannel> channels = new LinkedHashSet<>();
+        if (Boolean.TRUE.equals(onlineEnabled)) {
+            channels.add(BookingChannel.ONLINE);
+        }
+        if (Boolean.TRUE.equals(counterEnabled)) {
+            channels.add(BookingChannel.COUNTER);
+        }
+        return channels;
+    }
 }

@@ -1,6 +1,6 @@
 import apiClient from './api';
 
-export type PromotionType = 'MEMBER_TIER' | 'BIRTHDAY' | 'LEAP_DAY_BIRTHDAY' | 'E_WALLET';
+export type PromotionType = 'GENERAL' | 'MEMBER_TIER' | 'BIRTHDAY' | 'LEAP_DAY_BIRTHDAY' | 'E_WALLET';
 export type PromotionDiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT';
 export type PromotionStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'EXPIRED';
 export type PromotionUsageStatus = 'RESERVED' | 'APPLIED' | 'RELEASED';
@@ -8,6 +8,7 @@ export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'ZALOPAY' | 'MOMO';
 export type BirthdayRule = 'EXACT_DATE' | 'DATE_RANGE' | 'BIRTH_MONTH';
 export type LeapDayPolicy = 'LEAP_DAY_ONLY' | 'FEBRUARY_28' | 'MARCH_1';
 export type UsageLimitType = 'UNLIMITED' | 'LIMITED';
+export type BookingChannel = 'ONLINE' | 'COUNTER';
 
 export interface PromotionRequest {
   name: string;
@@ -18,6 +19,11 @@ export interface PromotionRequest {
   discountValue: number;
   maxDiscountAmount?: number;
   minOrderAmount?: number;
+  budgetLimit?: number;
+  publicVisible: boolean;
+  priority: number;
+  termsAndConditions?: string;
+  applicableChannels: BookingChannel[];
   startAt: string;
   endAt: string;
   dailyStartTime?: string;
@@ -40,6 +46,12 @@ export interface PromotionResponse extends PromotionRequest {
   status: PromotionStatus;
   reservedUsageCount: number;
   appliedUsageCount: number;
+  releasedUsageCount: number;
+  reservedDiscountAmount: number;
+  appliedDiscountAmount: number;
+  remainingBudget: number;
+  appliedOriginalAmount: number;
+  appliedNetAmount: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -58,6 +70,8 @@ export interface PromotionCatalogResponse {
   endAt: string;
   dailyStartTime?: string;
   dailyEndTime?: string;
+  termsAndConditions?: string;
+  applicableChannels: BookingChannel[];
   eligibleMemberTiers?: string[];
   walletPaymentMethod?: PaymentMethod;
 }
@@ -98,6 +112,7 @@ export interface PromotionUsage {
   birthday?: string;
   birthdayCycleYear?: number;
   paymentMethod?: PaymentMethod;
+  bookingChannel?: BookingChannel;
   originalAmount: number;
   discountAmount: number;
   finalAmount: number;
@@ -107,6 +122,18 @@ export interface PromotionUsage {
   confirmedAt?: string;
   releasedAt?: string;
   releaseReason?: string;
+}
+
+export interface PromotionAnalytics {
+  totalPromotions: number;
+  activePromotions: number;
+  scheduledPromotions: number;
+  reservedUsages: number;
+  appliedUsages: number;
+  releasedUsages: number;
+  originalRevenue: number;
+  discountGranted: number;
+  netRevenue: number;
 }
 
 export const promotionApi = {
@@ -145,14 +172,15 @@ export const promotionApi = {
     orderAmount: number;
     paymentMethod?: PaymentMethod;
     memberUserId?: string;
+    bookingChannel?: BookingChannel;
   }) => {
     const response = await apiClient.post('/promotions/validate', request);
     return response.data.result as PromotionEvaluation;
   },
 
-  getAvailable: async (orderAmount: number, paymentMethod?: PaymentMethod) => {
+  getAvailable: async (orderAmount: number, paymentMethod?: PaymentMethod, bookingChannel: BookingChannel = 'ONLINE') => {
     const response = await apiClient.get('/promotions/available', {
-      params: { orderAmount, paymentMethod },
+      params: { orderAmount, paymentMethod, bookingChannel },
     });
     return response.data.result as PromotionEvaluation[];
   },
@@ -160,6 +188,11 @@ export const promotionApi = {
   getUsages: async () => {
     const response = await apiClient.get('/promotions/admin/usages');
     return response.data.result as PromotionUsage[];
+  },
+
+  getAnalytics: async () => {
+    const response = await apiClient.get('/promotions/admin/analytics');
+    return response.data.result as PromotionAnalytics;
   },
 
   getMyUsages: async () => {

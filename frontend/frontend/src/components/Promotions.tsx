@@ -5,6 +5,7 @@ import { promotionApi, type PromotionCatalogResponse } from "@/api/promotionApi"
 const money = (value?: number) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 
 const typeLabel: Record<PromotionCatalogResponse["type"], string> = {
+  GENERAL: "Dành cho mọi khách hàng",
   MEMBER_TIER: "Dành cho hạng thành viên",
   BIRTHDAY: "Ưu đãi sinh nhật",
   LEAP_DAY_BIRTHDAY: "Ưu đãi sinh nhật 29/02",
@@ -90,6 +91,16 @@ export function Promotions() {
                 </div>
                 {promotion.minOrderAmount ? (
                   <p className="mt-2 text-xs text-slate-500">Đơn tối thiểu {money(promotion.minOrderAmount)}</p>
+                ) : null}
+                <p className="mt-2 text-xs font-semibold text-slate-500">
+                  {promotion.applicableChannels.includes("ONLINE") ? "Online" : ""}
+                  {promotion.applicableChannels.length > 1 ? " & " : ""}
+                  {promotion.applicableChannels.includes("COUNTER") ? "Tại quầy" : ""}
+                </p>
+                {promotion.termsAndConditions ? (
+                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400" title={promotion.termsAndConditions}>
+                    {promotion.termsAndConditions}
+                  </p>
                 ) : null}
                 <div className="mt-5 flex items-center gap-2">
                   <code className="flex-1 rounded-xl border border-dashed bg-slate-50 px-3 py-2.5 text-center font-black tracking-wider text-slate-700">

@@ -113,6 +113,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/auth/register/check",
                                 "/health",
+                                "/contact/track",
                                 "/memberships/plans",
                                 "/memberships/tiers",
                                 "/public/audio",
@@ -198,6 +199,8 @@ public class SecurityConfig {
                         // Management writes
                         .requestMatchers(HttpMethod.GET,
                                 "/tmdb/**").hasAnyAuthority("MOVIE_CREATE", "MOVIE_UPDATE")
+                        .requestMatchers(HttpMethod.GET,
+                                "/genres/admin").hasAnyAuthority("MOVIE_VIEW", "MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE")
                         .requestMatchers(HttpMethod.POST,
                                 "/movies",
                                 "/movies/upload-image").hasAnyAuthority("MOVIE_CREATE", "MOVIE_UPDATE")
@@ -210,7 +213,7 @@ public class SecurityConfig {
                                 "/promotions").hasAuthority("PROMOTION_MANAGE")
                         .requestMatchers(HttpMethod.POST,
                                 "/genres",
-                                "/genres/**").hasAnyAuthority("MOVIE_CREATE", "MOVIE_UPDATE")
+                                "/genres/**").hasAuthority("MOVIE_CREATE")
                         .requestMatchers(HttpMethod.POST,
                                 "/showtimes/admin",
                                 "/showtimes/admin/**",
@@ -255,6 +258,8 @@ public class SecurityConfig {
                                 "/combos/**").hasAuthority("COMBO_MANAGE")
                         .requestMatchers(HttpMethod.PATCH,
                                 "/promotions/**").hasAuthority("PROMOTION_MANAGE")
+                        .requestMatchers(HttpMethod.PATCH,
+                                "/genres/**").hasAuthority("MOVIE_UPDATE")
                         .requestMatchers(HttpMethod.PATCH,
                                 "/showtimes/admin/**").hasAuthority("SHOWTIME_MANAGE")
                         .requestMatchers(HttpMethod.DELETE,

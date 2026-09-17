@@ -1092,6 +1092,7 @@ export default function BookingPage() {
         code,
         orderAmount: afterBenefits,
         paymentMethod,
+        bookingChannel: 'ONLINE',
       });
       setVoucherInput(evaluation.code);
       setAppliedPromotion(evaluation);

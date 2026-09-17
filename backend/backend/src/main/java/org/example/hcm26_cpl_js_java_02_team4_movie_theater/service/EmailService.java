@@ -340,7 +340,7 @@ public class EmailService {
         }
     }
 
-    public void sendReplyEmail(String toEmail, String subject, String replyContent) {
+    public boolean sendReplyEmail(String toEmail, String subject, String replyContent) {
         var sanitizedEmail = sanitizeEmail(toEmail);
         log.info("Sending contact reply email to: {} from: {}", sanitizedEmail, fromEmail);
 
@@ -361,16 +361,17 @@ public class EmailService {
         try {
             sendHtmlMail(sanitizedEmail, subject, plainText, html);
             log.info("Contact reply email sent successfully to: {}", sanitizedEmail);
+            return true;
         } catch (AppException e) {
             if (fallbackToLog) {
                 log.warn("[EMAIL FALLBACK] Contact reply for {}: {}", sanitizedEmail, replyContent);
-                return;
+                return false;
             }
             throw e;
         } catch (Exception e) {
             if (fallbackToLog) {
                 log.warn("[EMAIL FALLBACK] Contact reply for {}: {}", sanitizedEmail, replyContent);
-                return;
+                return false;
             }
             log.error("Failed to send reply email to: {} - Error: {}", sanitizedEmail, e.getMessage(), e);
             throw emailSendFailed(e);

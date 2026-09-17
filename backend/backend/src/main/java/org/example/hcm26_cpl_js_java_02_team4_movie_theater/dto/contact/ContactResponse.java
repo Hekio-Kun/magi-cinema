@@ -11,6 +11,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ContactResponse {
     Long contactId;
+    String ticketCode;
     String senderName;
     String senderEmail;
     String subject;
@@ -20,7 +21,20 @@ public class ContactResponse {
     String aiReason;
     List<String> badWords;
     String status;
+    String category;
+    String priority;
+    String assignedToUserId;
+    String assignedToName;
+    String dueAt;
+    Boolean overdue;
+    String firstResponseAt;
+    String resolvedAt;
+    String closedAt;
+    String internalNote;
+    Boolean archived;
     String adminReply;
     String repliedAt;
     String createdAt;
+    String updatedAt;
+    List<ContactReplyResponse> replies;
 }

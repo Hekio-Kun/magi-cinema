@@ -52,7 +52,7 @@ export const DASHBOARD_PAGE_ACCESS: Record<string, DashboardRole[]> = {
 export const DASHBOARD_PAGE_PERMISSION_ACCESS: Record<string, string[]> = {
   "Quản lý phim": ["MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE"],
   "Cloudinary Audio Lab": ["MOVIE_CREATE", "MOVIE_UPDATE"],
-  "Thể loại": ["MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE"],
+  "Thể loại": ["MOVIE_VIEW", "MOVIE_CREATE", "MOVIE_UPDATE"],
   "Phòng chiếu": ["SHOWTIME_MANAGE", "BOOKING_VIEW"],
   "Lịch chiếu & ghế": ["SHOWTIME_MANAGE", "BOOKING_VIEW"],
   "Cấu hình giá vé": ["SHOWTIME_MANAGE"],

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -21,6 +22,9 @@ public class CustomerContact {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "contact_id")
     Long contactId;
+
+    @Column(name = "ticket_code", unique = true, length = 32)
+    String ticketCode;
 
     @Column(name = "sender_name", nullable = false)
     String senderName;
@@ -40,8 +44,14 @@ public class CustomerContact {
     @Column(name = "ai_approved", nullable = false)
     Boolean aiApproved;
 
-    @Column(name = "status", nullable = false)
-    String status; // "RECEIVED", "REPLIED"
+    @Column(name = "category", nullable = false, length = 30, columnDefinition = "varchar(30) default 'OTHER'")
+    String category;
+
+    @Column(name = "priority", nullable = false, length = 20, columnDefinition = "varchar(20) default 'NORMAL'")
+    String priority;
+
+    @Column(name = "status", nullable = false, length = 30)
+    String status;
 
     @Column(name = "ai_reason", columnDefinition = "text")
     String aiReason;
@@ -55,7 +65,36 @@ public class CustomerContact {
     @Column(name = "replied_at")
     LocalDateTime repliedAt;
 
+    @Column(name = "assigned_to_user_id", length = 36)
+    String assignedToUserId;
+
+    @Column(name = "assigned_to_name", length = 100)
+    String assignedToName;
+
+    @Column(name = "due_at")
+    LocalDateTime dueAt;
+
+    @Column(name = "first_response_at")
+    LocalDateTime firstResponseAt;
+
+    @Column(name = "resolved_at")
+    LocalDateTime resolvedAt;
+
+    @Column(name = "closed_at")
+    LocalDateTime closedAt;
+
+    @Column(name = "internal_note", columnDefinition = "text")
+    String internalNote;
+
+    @Builder.Default
+    @Column(name = "archived", nullable = false, columnDefinition = "boolean default false")
+    Boolean archived = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    LocalDateTime updatedAt;
 }

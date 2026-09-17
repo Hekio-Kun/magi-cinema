@@ -164,7 +164,7 @@ export function AdminDashboard() {
       case "Cloudinary Audio Lab":
         return <CloudinaryAudioLabPage />;
       case "Thể loại":
-        return <GenreManagementPage />;
+        return <GenreManagementPage canCreate={roles.includes("ADMIN") || scopes.includes("MOVIE_CREATE")} canUpdate={roles.includes("ADMIN") || scopes.includes("MOVIE_UPDATE")} />;
       case "Phòng chiếu":
         return <CinemaRoomManagementPage canManage={canManage} />;
       case "Lịch chiếu & ghế":

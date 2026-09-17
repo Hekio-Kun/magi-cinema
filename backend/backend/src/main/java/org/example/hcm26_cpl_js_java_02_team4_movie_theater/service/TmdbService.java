@@ -9,6 +9,8 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.movie.MovieRespo
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.tmdb.TmdbMovieDetailResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.tmdb.TmdbMovieSearchResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.Genre;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.GenreSource;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.GenreStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.MovieStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.AppException;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.exception.ErrorCode;
@@ -260,6 +262,9 @@ public class TmdbService {
             return genreRepository.save(Genre.builder()
                     .name(trimmedName)
                     .description("Tự động tạo từ TMDB")
+                    .slug(toGenreSlug(trimmedName))
+                    .status(GenreStatus.ACTIVE)
+                    .source(GenreSource.TMDB)
                     .build());
         } catch (DataIntegrityViolationException ex) {
             return genreRepository.findByNameIgnoreCase(trimmedName).orElseThrow(() -> ex);
@@ -271,6 +276,11 @@ public class TmdbService {
                 .genreId(genre.getGenreId())
                 .name(genre.getName())
                 .description(genre.getDescription())
+                .slug(genre.getSlug())
+                .colorCode(genre.getColorCode())
+                .displayOrder(genre.getDisplayOrder())
+                .status(genre.getStatus() == null ? GenreStatus.ACTIVE : genre.getStatus())
+                .source(genre.getSource() == null ? GenreSource.TMDB : genre.getSource())
                 .build();
     }
 
@@ -377,5 +387,12 @@ public class TmdbService {
         String normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
         return normalized.toLowerCase(Locale.ROOT).trim();
+    }
+
+    private static String toGenreSlug(String value) {
+        String slug = normalizeGenreName(value.replace('đ', 'd').replace('Đ', 'D'))
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        return slug.isBlank() ? "the-loai" : slug;
     }
 }

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionEvaluationResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionCatalogResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionAnalyticsResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionUsageResponse;
@@ -16,6 +17,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.User;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.UserMembership;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.UserProfile;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BirthdayRule;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingChannel;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.LeapDayPolicy;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.MembershipStatus;
@@ -53,6 +55,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -90,10 +93,16 @@ public class PromotionService {
     @Transactional(readOnly = true)
     public List<PromotionCatalogResponse> getPromotionCatalog() {
         LocalDateTime now = LocalDateTime.now(clock);
-        return promotionRepository.findAll(Sort.by(Sort.Direction.ASC, "endAt")).stream()
+        return promotionRepository.findAll().stream()
                 .filter(promotion -> promotion.getStatus() == PromotionStatus.ACTIVE)
                 .filter(promotion -> now.isBefore(promotion.getEndAt()))
+                .filter(promotion -> Boolean.TRUE.equals(promotion.getPublicVisible()))
+                .filter(promotion -> Boolean.TRUE.equals(promotion.getOnlineEnabled()))
+                .filter(this::hasBudgetAvailable)
+                .sorted(Comparator.comparing(Promotion::getPriority, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Promotion::getEndAt))
                 .map(promotion -> PromotionCatalogResponse.builder()
+                        .promotionId(promotion.getPromotionId())
                         .name(promotion.getName())
                         .code(promotion.getCode())
                         .description(promotion.getDescription())
@@ -102,6 +111,11 @@ public class PromotionService {
                         .discountValue(promotion.getDiscountValue())
                         .maxDiscountAmount(promotion.getMaxDiscountAmount())
                         .minOrderAmount(promotion.getMinOrderAmount())
+                        .termsAndConditions(promotion.getTermsAndConditions())
+                        .applicableChannels(promotion.getApplicableChannels())
+                        .startAt(promotion.getStartAt())
+                        .dailyStartTime(promotion.getDailyStartTime())
+                        .dailyEndTime(promotion.getDailyEndTime())
                         .eligibleMemberTiers(new LinkedHashSet<>(promotion.getEligibleMemberTiers()))
                         .walletPaymentMethod(promotion.getWalletPaymentMethod())
                         .endAt(promotion.getEndAt())
@@ -150,6 +164,15 @@ public class PromotionService {
             throw new AppException(ErrorCode.PROMOTION_CODE_EXISTED);
         }
 
+        long committedDiscount = promotionUsageRepository.sumDiscountAmount(
+                promotionId,
+                Set.of(PromotionUsageStatus.APPLIED));
+        if (request.getBudgetLimit() != null && request.getBudgetLimit() < committedDiscount) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Ngân sách không được thấp hơn " + committedDiscount + " đồng đã giảm cho khách hàng.");
+        }
+
         PromotionStatus currentStatus = promotion.getStatus();
         applyRequest(promotion, request);
         promotion.setCode(code);
@@ -164,6 +187,16 @@ public class PromotionService {
         LocalDateTime now = LocalDateTime.now(clock);
         if (!promotion.getEndAt().isAfter(now)) {
             throw new AppException(ErrorCode.PROMOTION_EXPIRED);
+        }
+        if (promotion.getBudgetLimit() != null) {
+            long committedDiscount = promotionUsageRepository.sumDiscountAmount(
+                    promotionId,
+                    LIMITING_USAGE_STATUSES);
+            if (committedDiscount >= promotion.getBudgetLimit()) {
+                throw new AppException(
+                        ErrorCode.PROMOTION_USAGE_LIMIT_REACHED,
+                        "Ngân sách giảm giá của chương trình đã hết.");
+            }
         }
         promotion.setStatus(PromotionStatus.ACTIVE);
         return toResponse(promotionRepository.save(promotion));
@@ -182,13 +215,28 @@ public class PromotionService {
     public List<PromotionEvaluationResponse> getAvailablePromotions(
             Integer orderAmount,
             PaymentMethod paymentMethod) {
+        return getAvailablePromotions(orderAmount, paymentMethod, BookingChannel.ONLINE);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PromotionEvaluationResponse> getAvailablePromotions(
+            Integer orderAmount,
+            PaymentMethod paymentMethod,
+            BookingChannel bookingChannel) {
         if (orderAmount == null || orderAmount < 0) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Giá trị đơn hàng không hợp lệ.");
         }
         User user = getCurrentUser();
         LocalDateTime now = LocalDateTime.now(clock);
         return promotionRepository.findAll(Sort.by(Sort.Direction.ASC, "endAt")).stream()
-                .map(promotion -> evaluateSafely(promotion, user, orderAmount, paymentMethod, now))
+                .filter(promotion -> Boolean.TRUE.equals(promotion.getPublicVisible()))
+                .map(promotion -> evaluateSafely(
+                        promotion,
+                        user,
+                        orderAmount,
+                        paymentMethod,
+                        bookingChannel == null ? BookingChannel.ONLINE : bookingChannel,
+                        now))
                 .filter(java.util.Objects::nonNull)
                 .map(evaluation -> evaluation.response())
                 .toList();
@@ -199,7 +247,13 @@ public class PromotionService {
         User user = resolveValidationUser(request.getMemberUserId());
         Promotion promotion = promotionRepository.findByCodeIgnoreCase(normalizeCode(request.getCode()))
                 .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
-        return evaluate(promotion, user, request.getOrderAmount(), request.getPaymentMethod(), LocalDateTime.now(clock))
+        return evaluate(
+                promotion,
+                user,
+                request.getOrderAmount(),
+                request.getPaymentMethod(),
+                request.getBookingChannel() == null ? BookingChannel.ONLINE : request.getBookingChannel(),
+                LocalDateTime.now(clock))
                 .response();
     }
 
@@ -221,6 +275,7 @@ public class PromotionService {
                 booking.getUser(),
                 booking.getTotalAmount(),
                 paymentMethod,
+                booking.getBookingChannel() == null ? BookingChannel.ONLINE : booking.getBookingChannel(),
                 LocalDateTime.now(clock));
 
         PromotionUsage usage = promotionUsageRepository.findByBookingIdForUpdate(booking.getBookingId())
@@ -295,6 +350,7 @@ public class PromotionService {
                     booking.getUser(),
                     usage.getOriginalAmount(),
                     paymentMethod,
+                    booking.getBookingChannel() == null ? BookingChannel.ONLINE : booking.getBookingChannel(),
                     LocalDateTime.now(clock));
         } catch (AppException exception) {
             releaseUsage(usage, resolveMessage(exception));
@@ -358,6 +414,40 @@ public class PromotionService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public PromotionAnalyticsResponse getAnalytics() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<Promotion> promotions = promotionRepository.findAll();
+        List<PromotionUsage> usages = promotionUsageRepository.findAll();
+        long reserved = usages.stream()
+                .filter(usage -> usage.getStatus() == PromotionUsageStatus.RESERVED)
+                .count();
+        List<PromotionUsage> applied = usages.stream()
+                .filter(usage -> usage.getStatus() == PromotionUsageStatus.APPLIED)
+                .toList();
+        long released = usages.stream()
+                .filter(usage -> usage.getStatus() == PromotionUsageStatus.RELEASED)
+                .count();
+        return PromotionAnalyticsResponse.builder()
+                .totalPromotions(promotions.size())
+                .activePromotions(promotions.stream()
+                        .filter(promotion -> promotion.getStatus() == PromotionStatus.ACTIVE)
+                        .filter(promotion -> !now.isBefore(promotion.getStartAt()))
+                        .filter(promotion -> now.isBefore(promotion.getEndAt()))
+                        .count())
+                .scheduledPromotions(promotions.stream()
+                        .filter(promotion -> promotion.getStatus() == PromotionStatus.ACTIVE)
+                        .filter(promotion -> now.isBefore(promotion.getStartAt()))
+                        .count())
+                .reservedUsages(reserved)
+                .appliedUsages(applied.size())
+                .releasedUsages(released)
+                .originalRevenue(applied.stream().mapToLong(PromotionUsage::getOriginalAmount).sum())
+                .discountGranted(applied.stream().mapToLong(PromotionUsage::getDiscountAmount).sum())
+                .netRevenue(applied.stream().mapToLong(PromotionUsage::getFinalAmount).sum())
+                .build();
+    }
+
     @Scheduled(cron = "0 */5 * * * *")
     @Transactional
     public void expirePromotions() {
@@ -379,9 +469,10 @@ public class PromotionService {
             User user,
             int orderAmount,
             PaymentMethod paymentMethod,
+            BookingChannel bookingChannel,
             LocalDateTime now) {
         try {
-            return evaluate(promotion, user, orderAmount, paymentMethod, now);
+            return evaluate(promotion, user, orderAmount, paymentMethod, bookingChannel, now);
         } catch (AppException ignored) {
             return null;
         }
@@ -392,8 +483,9 @@ public class PromotionService {
             User user,
             int orderAmount,
             PaymentMethod paymentMethod,
+            BookingChannel bookingChannel,
             LocalDateTime now) {
-        return evaluate(promotion, user, orderAmount, paymentMethod, now, false, false);
+        return evaluate(promotion, user, orderAmount, paymentMethod, bookingChannel, now, false, false);
     }
 
     private PromotionEvaluation evaluateExistingReservation(
@@ -401,8 +493,9 @@ public class PromotionService {
             User user,
             int orderAmount,
             PaymentMethod paymentMethod,
+            BookingChannel bookingChannel,
             LocalDateTime now) {
-        return evaluate(promotion, user, orderAmount, paymentMethod, now, true, true);
+        return evaluate(promotion, user, orderAmount, paymentMethod, bookingChannel, now, true, true);
     }
 
     private PromotionEvaluation evaluateForReservation(
@@ -410,8 +503,9 @@ public class PromotionService {
             User user,
             int orderAmount,
             PaymentMethod paymentMethod,
+            BookingChannel bookingChannel,
             LocalDateTime now) {
-        return evaluate(promotion, user, orderAmount, paymentMethod, now, false, true);
+        return evaluate(promotion, user, orderAmount, paymentMethod, bookingChannel, now, false, true);
     }
 
     private PromotionEvaluation evaluate(
@@ -419,13 +513,12 @@ public class PromotionService {
             User user,
             int orderAmount,
             PaymentMethod paymentMethod,
+            BookingChannel bookingChannel,
             LocalDateTime now,
             boolean existingReservation,
             boolean lockProfile) {
-        if (promotion.getType() == PromotionType.E_WALLET && hasAuthority("BOOKING_MANAGE")) {
-            throw new AppException(ErrorCode.PROMOTION_NOT_APPLICABLE, "Chỉ áp dụng voucher ví điện tử khi đặt vé online.");
-        }
         validatePromotionState(promotion, now);
+        validateBookingChannel(promotion, bookingChannel);
         if (orderAmount < 0) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Giá trị đơn hàng không hợp lệ.");
         }
@@ -453,8 +546,9 @@ public class PromotionService {
             validateWallet(promotion, paymentMethod);
         }
 
-        validateUsageLimits(promotion, user, birthdayCycleYear, existingReservation);
         int discountAmount = calculateDiscount(promotion, orderAmount);
+        validateUsageLimits(promotion, user, birthdayCycleYear, existingReservation);
+        validateBudget(promotion, discountAmount, existingReservation);
         PromotionEvaluationResponse response = PromotionEvaluationResponse.builder()
                 .promotionId(promotion.getPromotionId())
                 .name(promotion.getName())
@@ -591,6 +685,48 @@ public class PromotionService {
         }
     }
 
+    private void validateBookingChannel(Promotion promotion, BookingChannel bookingChannel) {
+        BookingChannel resolvedChannel = bookingChannel == null ? BookingChannel.ONLINE : bookingChannel;
+        boolean applicable = resolvedChannel == BookingChannel.ONLINE
+                ? Boolean.TRUE.equals(promotion.getOnlineEnabled())
+                : Boolean.TRUE.equals(promotion.getCounterEnabled());
+        if (!applicable) {
+            String channelName = resolvedChannel == BookingChannel.ONLINE ? "đặt vé online" : "bán vé tại quầy";
+            throw new AppException(
+                    ErrorCode.PROMOTION_NOT_APPLICABLE,
+                    "Promotion không áp dụng cho kênh " + channelName + ".");
+        }
+        if (promotion.getType() == PromotionType.E_WALLET && resolvedChannel == BookingChannel.COUNTER) {
+            throw new AppException(
+                    ErrorCode.PROMOTION_NOT_APPLICABLE,
+                    "Voucher ví điện tử chỉ áp dụng khi đặt vé online.");
+        }
+    }
+
+    private void validateBudget(Promotion promotion, int discountAmount, boolean existingReservation) {
+        if (promotion.getBudgetLimit() == null) {
+            return;
+        }
+        long committed = promotionUsageRepository.sumDiscountAmount(
+                promotion.getPromotionId(),
+                LIMITING_USAGE_STATUSES);
+        if (existingReservation) {
+            committed = Math.max(0, committed - discountAmount);
+        }
+        if (committed + discountAmount > promotion.getBudgetLimit()) {
+            throw new AppException(
+                    ErrorCode.PROMOTION_USAGE_LIMIT_REACHED,
+                    "Ngân sách giảm giá của chương trình không còn đủ cho đơn hàng này.");
+        }
+    }
+
+    private boolean hasBudgetAvailable(Promotion promotion) {
+        return promotion.getBudgetLimit() == null
+                || promotionUsageRepository.sumDiscountAmount(
+                        promotion.getPromotionId(),
+                        LIMITING_USAGE_STATUSES) < promotion.getBudgetLimit();
+    }
+
     private void validateUsageLimits(
             Promotion promotion,
             User user,
@@ -708,6 +844,32 @@ public class PromotionService {
             throw new AppException(
                     ErrorCode.VALIDATION_ERROR,
                     "Phần trăm giảm phải từ 1 đến 100.");
+        }
+        if (request.getApplicableChannels() == null || request.getApplicableChannels().isEmpty()) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Phải chọn ít nhất một kênh áp dụng promotion.");
+        }
+        if (request.getType() == PromotionType.E_WALLET
+                && !request.getApplicableChannels().equals(Set.of(BookingChannel.ONLINE))) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Promotion ví điện tử chỉ được áp dụng cho kênh online.");
+        }
+        if (request.getPriority() == null || request.getPriority() < 0 || request.getPriority() > 100) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Độ ưu tiên phải nằm trong khoảng từ 0 đến 100.");
+        }
+        if (request.getBudgetLimit() != null) {
+            int maximumSingleDiscount = request.getDiscountType() == PromotionDiscountType.FIXED_AMOUNT
+                    ? request.getDiscountValue()
+                    : request.getMaxDiscountAmount() == null ? 0 : request.getMaxDiscountAmount();
+            if (maximumSingleDiscount > 0 && request.getBudgetLimit() < maximumSingleDiscount) {
+                throw new AppException(
+                        ErrorCode.VALIDATION_ERROR,
+                        "Ngân sách phải đủ cho ít nhất một lượt giảm tối đa.");
+            }
         }
         validateUsageLimit(
                 request.getTotalUsageLimitType(),
@@ -835,6 +997,12 @@ public class PromotionService {
         promotion.setDiscountValue(request.getDiscountValue());
         promotion.setMaxDiscountAmount(request.getMaxDiscountAmount());
         promotion.setMinOrderAmount(request.getMinOrderAmount());
+        promotion.setBudgetLimit(request.getBudgetLimit());
+        promotion.setPublicVisible(!Boolean.FALSE.equals(request.getPublicVisible()));
+        promotion.setPriority(request.getPriority() == null ? 0 : request.getPriority());
+        promotion.setTermsAndConditions(normalizeOptional(request.getTermsAndConditions()));
+        promotion.setOnlineEnabled(request.getApplicableChannels().contains(BookingChannel.ONLINE));
+        promotion.setCounterEnabled(request.getApplicableChannels().contains(BookingChannel.COUNTER));
         promotion.setStartAt(request.getStartAt());
         promotion.setEndAt(request.getEndAt());
         promotion.setDailyStartTime(request.getDailyStartTime());
@@ -880,6 +1048,24 @@ public class PromotionService {
         long applied = promotionUsageRepository.countByPromotion_PromotionIdAndStatusIn(
                 promotion.getPromotionId(),
                 Set.of(PromotionUsageStatus.APPLIED));
+        long released = promotionUsageRepository.countByPromotion_PromotionIdAndStatusIn(
+                promotion.getPromotionId(),
+                Set.of(PromotionUsageStatus.RELEASED));
+        long reservedDiscount = promotionUsageRepository.sumDiscountAmount(
+                promotion.getPromotionId(),
+                Set.of(PromotionUsageStatus.RESERVED));
+        long appliedDiscount = promotionUsageRepository.sumDiscountAmount(
+                promotion.getPromotionId(),
+                Set.of(PromotionUsageStatus.APPLIED));
+        long appliedOriginal = promotionUsageRepository.sumOriginalAmount(
+                promotion.getPromotionId(),
+                Set.of(PromotionUsageStatus.APPLIED));
+        long appliedNet = promotionUsageRepository.sumFinalAmount(
+                promotion.getPromotionId(),
+                Set.of(PromotionUsageStatus.APPLIED));
+        long remainingBudget = promotion.getBudgetLimit() == null
+                ? -1
+                : Math.max(0, (long) promotion.getBudgetLimit() - reservedDiscount - appliedDiscount);
         return PromotionResponse.builder()
                 .promotionId(promotion.getPromotionId())
                 .name(promotion.getName())
@@ -890,6 +1076,17 @@ public class PromotionService {
                 .discountValue(promotion.getDiscountValue())
                 .maxDiscountAmount(promotion.getMaxDiscountAmount())
                 .minOrderAmount(promotion.getMinOrderAmount())
+                .budgetLimit(promotion.getBudgetLimit())
+                .reservedDiscountAmount(reservedDiscount)
+                .appliedDiscountAmount(appliedDiscount)
+                .remainingBudget(remainingBudget)
+                .appliedOriginalAmount(appliedOriginal)
+                .appliedNetAmount(appliedNet)
+                .releasedUsageCount(released)
+                .publicVisible(promotion.getPublicVisible())
+                .priority(promotion.getPriority())
+                .termsAndConditions(promotion.getTermsAndConditions())
+                .applicableChannels(promotion.getApplicableChannels())
                 .startAt(promotion.getStartAt())
                 .endAt(promotion.getEndAt())
                 .dailyStartTime(promotion.getDailyStartTime())
@@ -926,6 +1123,7 @@ public class PromotionService {
                 .birthday(usage.getBirthday())
                 .birthdayCycleYear(usage.getBirthdayCycleYear())
                 .paymentMethod(usage.getPaymentMethod())
+                .bookingChannel(usage.getBooking().getBookingChannel())
                 .originalAmount(usage.getOriginalAmount())
                 .discountAmount(usage.getDiscountAmount())
                 .finalAmount(usage.getFinalAmount())

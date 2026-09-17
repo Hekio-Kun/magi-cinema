@@ -146,6 +146,17 @@ export function CustomerPromotionsPage() {
                           Giảm tối đa <strong className="text-gray-900">{formatCurrency(promo.maxDiscountAmount)}</strong>
                         </div>
                       )}
+                      <div className="flex items-center gap-2 text-xs font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg w-fit">
+                        <span className="text-gray-400">•</span>
+                        {promo.applicableChannels.includes('ONLINE') ? 'Đặt vé online' : ''}
+                        {promo.applicableChannels.includes('ONLINE') && promo.applicableChannels.includes('COUNTER') ? ' & ' : ''}
+                        {promo.applicableChannels.includes('COUNTER') ? 'Mua vé tại quầy' : ''}
+                      </div>
+                      {promo.termsAndConditions && (
+                        <p className="text-xs leading-5 text-gray-500" title={promo.termsAndConditions}>
+                          Điều khoản: {promo.termsAndConditions}
+                        </p>
+                      )}
                     </div>
                   </div>
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import {
   ArrowUpDown,
   BadgePercent,
+  Banknote,
   CalendarClock,
   CalendarDays,
   Check,
@@ -11,6 +12,9 @@ import {
   CircleHelp,
   Clock3,
   Edit3,
+  Eye,
+  EyeOff,
+  Globe2,
   History,
   Loader2,
   Plus,
@@ -18,6 +22,7 @@ import {
   PowerOff,
   Search,
   ShieldCheck,
+  Store,
   Tag,
   UsersRound,
   WalletCards,
@@ -30,6 +35,8 @@ import {
   type BirthdayRule,
   type LeapDayPolicy,
   type PaymentMethod,
+  type BookingChannel,
+  type PromotionAnalytics,
   type PromotionDiscountType,
   type PromotionRequest,
   type PromotionResponse,
@@ -99,6 +106,12 @@ const validatePromotionStep = (
     if (form.description && form.description.length > 1000) {
       errors.description = "Mô tả tối đa 1000 ký tự.";
     }
+    if ((form.termsAndConditions?.length ?? 0) > 2000) {
+      errors.termsAndConditions = "Điều khoản tối đa 2000 ký tự.";
+    }
+    if (form.priority < 0 || form.priority > 100) {
+      errors.priority = "Độ ưu tiên phải từ 0 đến 100.";
+    }
   }
   if (step === 2) {
     if (!form.startAt) errors.startAt = "Thời gian bắt đầu là bắt buộc.";
@@ -143,6 +156,12 @@ const validatePromotionStep = (
     if (form.type === "E_WALLET" && !form.walletPaymentMethod) {
       errors.walletPaymentMethod = "Vui lòng chọn ví điện tử áp dụng.";
     }
+    if (form.applicableChannels.length === 0) {
+      errors.applicableChannels = "Phải chọn ít nhất một kênh bán.";
+    }
+    if (form.type === "E_WALLET" && (form.applicableChannels.length !== 1 || form.applicableChannels[0] !== "ONLINE")) {
+      errors.applicableChannels = "Voucher ví điện tử chỉ áp dụng online.";
+    }
   }
   if (step === 4) {
     if ((form.discountValue ?? 0) < 1) errors.discountValue = "Giá trị giảm phải lớn hơn 0.";
@@ -163,6 +182,15 @@ const validatePromotionStep = (
         && (form.perCustomerUsageLimit ?? 0) > (form.totalUsageLimit ?? 0)) {
       errors.perCustomerUsageLimit = "Lượt mỗi khách không được vượt tổng lượt chương trình.";
     }
+    if (form.budgetLimit != null && form.budgetLimit < 1000) {
+      errors.budgetLimit = "Ngân sách phải từ 1.000 ₫.";
+    }
+    const maximumDiscount = form.discountType === "FIXED_AMOUNT"
+      ? form.discountValue
+      : (form.maxDiscountAmount ?? 0);
+    if (form.budgetLimit != null && maximumDiscount > 0 && form.budgetLimit < maximumDiscount) {
+      errors.budgetLimit = "Ngân sách phải đủ cho ít nhất một lượt giảm tối đa.";
+    }
   }
   return errors;
 };
@@ -178,10 +206,14 @@ const createInitialForm = (): PromotionRequest => {
     name: "",
     code: "",
     description: "",
-    type: "MEMBER_TIER",
+    type: "GENERAL",
     discountType: "PERCENTAGE",
     discountValue: 10,
     minOrderAmount: 0,
+    publicVisible: true,
+    priority: 50,
+    termsAndConditions: "Không áp dụng đồng thời với chương trình khuyến mãi khác.",
+    applicableChannels: ["ONLINE", "COUNTER"],
     startAt,
     endAt: startAt.slice(0, 4) === candidateEndAt.slice(0, 4)
       ? candidateEndAt
@@ -194,6 +226,7 @@ const createInitialForm = (): PromotionRequest => {
 };
 
 const TYPE_LABELS: Record<PromotionType, string> = {
+  GENERAL: "Toàn bộ khách hàng",
   MEMBER_TIER: "Hạng thành viên",
   BIRTHDAY: "Sinh nhật",
   LEAP_DAY_BIRTHDAY: "Sinh nhật 29/02",
@@ -242,10 +275,26 @@ export function PromotionManagementPage() {
   const [typeFilter, setTypeFilter] = useState<PromotionType | "">("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<PromotionSort>("NEWEST");
+  const [analytics, setAnalytics] = useState<PromotionAnalytics>({
+    totalPromotions: 0,
+    activePromotions: 0,
+    scheduledPromotions: 0,
+    reservedUsages: 0,
+    appliedUsages: 0,
+    releasedUsages: 0,
+    originalRevenue: 0,
+    discountGranted: 0,
+    netRevenue: 0,
+  });
 
   const loadPromotions = useCallback(async () => {
     try {
-      setPromotions(await promotionApi.getPromotions());
+      const [promotionData, analyticsData] = await Promise.all([
+        promotionApi.getPromotions(),
+        promotionApi.getAnalytics(),
+      ]);
+      setPromotions(promotionData);
+      setAnalytics(analyticsData);
     } catch (error) {
       toast.error(messageOf(error, "Không thể tải danh sách promotion."));
     } finally {
@@ -255,8 +304,8 @@ export function PromotionManagementPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([promotionApi.getPromotions(), membershipApi.getAdminPlans()])
-      .then(([promotionResult, planResult]) => {
+    Promise.allSettled([promotionApi.getPromotions(), membershipApi.getAdminPlans(), promotionApi.getAnalytics()])
+      .then(([promotionResult, planResult, analyticsResult]) => {
         if (cancelled) return;
         if (promotionResult.status === "fulfilled") {
           setPromotions(promotionResult.value);
@@ -267,6 +316,11 @@ export function PromotionManagementPage() {
           setMembershipPlans(planResult.value);
         } else {
           toast.error(messageOf(planResult.reason, "Không thể tải danh sách hạng hội viên."));
+        }
+        if (analyticsResult.status === "fulfilled") {
+          setAnalytics(analyticsResult.value);
+        } else {
+          toast.error(messageOf(analyticsResult.reason, "Không thể tải số liệu khuyến mãi."));
         }
       })
       .finally(() => {
@@ -344,6 +398,11 @@ export function PromotionManagementPage() {
       discountValue: promotion.discountValue,
       maxDiscountAmount: promotion.maxDiscountAmount,
       minOrderAmount: promotion.minOrderAmount,
+      budgetLimit: promotion.budgetLimit,
+      publicVisible: promotion.publicVisible,
+      priority: promotion.priority,
+      termsAndConditions: promotion.termsAndConditions || "",
+      applicableChannels: promotion.applicableChannels || ["ONLINE", "COUNTER"],
       startAt: promotion.startAt.slice(0, 16),
       endAt: promotion.endAt.slice(0, 16),
       dailyStartTime: promotion.dailyStartTime?.slice(0, 5),
@@ -373,6 +432,9 @@ export function PromotionManagementPage() {
 
   const changePromotionType = (type: PromotionType) => {
     const next = { ...form, type };
+    if (type === "E_WALLET") {
+      next.applicableChannels = ["ONLINE"];
+    }
     if (isBirthdayPromotion(type)) {
       Object.assign(next, annualRange(yearOfInput(form.startAt)));
       next.birthdayRule = next.birthdayRule || "BIRTH_MONTH";
@@ -506,7 +568,7 @@ export function PromotionManagementPage() {
             <Tag size={15} /> Promotion
           </div>
           <h1 className="mt-1 text-2xl font-black text-slate-950">Quản lý khuyến mãi</h1>
-          <p className="mt-1 text-sm text-slate-500">Hạng thành viên, sinh nhật và ví điện tử.</p>
+          <p className="mt-1 text-sm text-slate-500">Vận hành chiến dịch, ngân sách và hiệu quả doanh thu theo thời gian thực.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={openHistory} className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">
@@ -517,6 +579,13 @@ export function PromotionManagementPage() {
           </button>
         </div>
       </header>
+
+      <section className="grid gap-3 border-b bg-slate-100/70 px-5 py-4 md:grid-cols-2 md:px-7 xl:grid-cols-4" aria-label="Hiệu quả khuyến mãi">
+        <MetricCard icon={<Banknote size={18} />} label="Doanh thu trước giảm" value={money(analytics.originalRevenue)} hint={`${analytics.appliedUsages} lượt đã thanh toán`} tone="slate" />
+        <MetricCard icon={<BadgePercent size={18} />} label="Chi phí khuyến mãi" value={money(analytics.discountGranted)} hint={analytics.originalRevenue > 0 ? `${Math.round(analytics.discountGranted * 100 / analytics.originalRevenue)}% doanh thu gốc` : "Chưa phát sinh"} tone="rose" />
+        <MetricCard icon={<CheckCircle2 size={18} />} label="Doanh thu thực thu" value={money(analytics.netRevenue)} hint={`${analytics.reservedUsages} lượt đang giữ`} tone="emerald" />
+        <MetricCard icon={<CalendarClock size={18} />} label="Chiến dịch vận hành" value={`${analytics.activePromotions} đang chạy`} hint={`${analytics.scheduledPromotions} chiến dịch sắp mở`} tone="amber" />
+      </section>
 
       <section className="border-b bg-white px-5 py-4 md:px-7" aria-label="Tổng quan promotion">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -546,6 +615,7 @@ export function PromotionManagementPage() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:shrink-0">
             <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as PromotionType | "")} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-amber-500 xl:w-48">
               <option value="">Mọi loại promotion</option>
+              <option value="GENERAL">Toàn bộ khách hàng</option>
               <option value="MEMBER_TIER">Hạng thành viên</option>
               <option value="BIRTHDAY">Sinh nhật</option>
               <option value="LEAP_DAY_BIRTHDAY">Sinh nhật 29/02</option>
@@ -596,6 +666,10 @@ export function PromotionManagementPage() {
                         {STATUS_LABELS[promotion.status]}
                       </span>
                       <span className="text-xs font-bold text-slate-500">{TYPE_LABELS[promotion.type]}</span>
+                      <span className={`inline-flex items-center gap-1 text-xs font-bold ${promotion.publicVisible ? "text-sky-700" : "text-violet-700"}`}>
+                        {promotion.publicVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+                        {promotion.publicVisible ? "Công khai" : "Mã riêng"}
+                      </span>
                     </div>
                     <h2 className="mt-3 truncate text-lg font-black text-slate-900" title={promotion.name}>{promotion.name}</h2>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -627,6 +701,8 @@ export function PromotionManagementPage() {
                   <Info label="Đơn tối thiểu" value={money(promotion.minOrderAmount)} />
                   <Info label="Đã dùng" value={`${promotion.appliedUsageCount}/${promotion.totalUsageLimitType === "UNLIMITED" ? "∞" : promotion.totalUsageLimit}`} />
                   <Info label="Đang giữ" value={String(promotion.reservedUsageCount)} />
+                  <Info label="Tiền đã giảm" value={money(promotion.appliedDiscountAmount)} />
+                  <Info label="Thực thu" value={money(promotion.appliedNetAmount)} />
                   {promotion.type === "MEMBER_TIER" && (
                     <Info
                       label="Hạng hội viên"
@@ -635,6 +711,27 @@ export function PromotionManagementPage() {
                       ).join(", ") || "—"}
                     />
                   )}
+                </div>
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
+                    <span>Ngân sách</span>
+                    <span>{promotion.budgetLimit == null
+                      ? "Không giới hạn"
+                      : `${money(promotion.appliedDiscountAmount + promotion.reservedDiscountAmount)} / ${money(promotion.budgetLimit)}`}</span>
+                  </div>
+                  {promotion.budgetLimit != null && (
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full rounded-full ${promotion.remainingBudget === 0 ? "bg-rose-500" : "bg-amber-500"}`}
+                        style={{ width: `${Math.min(100, (promotion.appliedDiscountAmount + promotion.reservedDiscountAmount) * 100 / promotion.budgetLimit)}%` }}
+                      />
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                    {promotion.applicableChannels.includes("ONLINE") && <span className="inline-flex items-center gap-1"><Globe2 size={12} /> Online</span>}
+                    {promotion.applicableChannels.includes("COUNTER") && <span className="inline-flex items-center gap-1"><Store size={12} /> Tại quầy</span>}
+                    <span>Ưu tiên {promotion.priority}</span>
+                  </div>
                 </div>
                 <div className="mt-4 flex items-center gap-2 border-t pt-4 text-xs text-slate-500">
                   <CalendarDays size={14} /> {dateTime(promotion.startAt)} → {dateTime(promotion.endAt)}
@@ -698,14 +795,28 @@ export function PromotionManagementPage() {
                   </Field>
                   <Field label="Loại promotion">
                     <select value={form.type} onChange={(e) => changePromotionType(e.target.value as PromotionType)}>
-                      <option value="MEMBER_TIER">Khách hàng / hạng thành viên</option>
+                      <option value="GENERAL">Toàn bộ khách hàng</option>
+                      <option value="MEMBER_TIER">Theo hạng thành viên</option>
                       <option value="BIRTHDAY">Sinh nhật thông thường</option>
                       <option value="LEAP_DAY_BIRTHDAY">Sinh nhật ngày 29/02</option>
                       <option value="E_WALLET">Thanh toán ví điện tử</option>
                     </select>
                   </Field>
+                  <Field label="Độ ưu tiên hiển thị" hint="0–100, số lớn được đưa lên trước" error={formErrors.priority}>
+                    <input type="number" min={0} max={100} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
+                  </Field>
+                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                    <span>
+                      <span className="flex items-center gap-2 text-sm font-black text-slate-800">{form.publicVisible ? <Eye size={16} /> : <EyeOff size={16} />} Hiển thị công khai</span>
+                      <span className="mt-1 block text-xs text-slate-500">Tắt để tạo mã riêng, khách vẫn nhập được mã khi thanh toán.</span>
+                    </span>
+                    <input type="checkbox" checked={form.publicVisible} onChange={(e) => setForm({ ...form, publicVisible: e.target.checked })} className="h-5 w-5 accent-slate-950" />
+                  </label>
                   <Field label="Mô tả" hint="Nội dung khách hàng sẽ nhìn thấy" error={formErrors.description} wide>
                     <textarea rows={3} value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Mô tả ngắn gọn quyền lợi và điều kiện áp dụng" />
+                  </Field>
+                  <Field label="Điều khoản áp dụng" hint="Hiển thị cùng voucher để khách hiểu rõ điều kiện" error={formErrors.termsAndConditions} wide>
+                    <textarea rows={3} value={form.termsAndConditions || ""} onChange={(e) => setForm({ ...form, termsAndConditions: e.target.value })} placeholder="Ví dụ: Không áp dụng đồng thời với ưu đãi khác..." />
                   </Field>
                 </div>
               </FormSection>
@@ -802,6 +913,32 @@ export function PromotionManagementPage() {
                   <Field label="Giá trị đơn tối thiểu" error={formErrors.minOrderAmount} wide>
                     <MoneyInput value={form.minOrderAmount} onChange={(value) => setForm({ ...form, minOrderAmount: value })} placeholder="0" />
                   </Field>
+                  <Field label="Kênh bán được áp dụng" hint="Chọn nơi nhân viên hoặc khách hàng có thể dùng mã" error={formErrors.applicableChannels} wide>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(["ONLINE", "COUNTER"] as BookingChannel[]).map((channel) => {
+                        const selected = form.applicableChannels.includes(channel);
+                        const disabled = form.type === "E_WALLET" && channel === "COUNTER";
+                        return (
+                          <label key={channel} className={`flex items-center gap-3 rounded-xl border p-4 ${disabled ? "cursor-not-allowed bg-slate-100 opacity-50" : "cursor-pointer"} ${selected ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white"}`}>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              disabled={disabled}
+                              onChange={() => setForm({
+                                ...form,
+                                applicableChannels: selected
+                                  ? form.applicableChannels.filter((item) => item !== channel)
+                                  : [...form.applicableChannels, channel],
+                              })}
+                              className="h-4 w-4 accent-amber-600"
+                            />
+                            {channel === "ONLINE" ? <Globe2 size={17} /> : <Store size={17} />}
+                            <span className="font-bold text-slate-800">{channel === "ONLINE" ? "Đặt vé online" : "Bán tại quầy"}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </Field>
                   {form.type === "MEMBER_TIER" && (
                     <Field label="Hạng hội viên được áp dụng" hint="Danh sách được đồng bộ từ cấu hình hạng hội viên." error={formErrors.eligibleMemberTiers} wide>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -881,6 +1018,9 @@ export function PromotionManagementPage() {
                       <MoneyInput value={form.maxDiscountAmount} onChange={(value) => setForm({ ...form, maxDiscountAmount: value })} placeholder="Không giới hạn" />
                     </Field>
                   )}
+                  <Field label="Ngân sách giảm giá" hint="Để trống nếu không giới hạn theo tiền" error={formErrors.budgetLimit}>
+                    <MoneyInput value={form.budgetLimit} onChange={(value) => setForm({ ...form, budgetLimit: value })} placeholder="Không giới hạn" />
+                  </Field>
                   <Field label="Tổng lượt toàn chương trình" error={formErrors.totalUsageLimit}>
                     <div className="grid gap-2">
                       <select value={form.totalUsageLimitType} onChange={(e) => {
@@ -911,6 +1051,9 @@ export function PromotionManagementPage() {
                   <Info label="Thời gian" value={`${dateTime(form.startAt)} → ${dateTime(form.endAt)}`} />
                   <Info label="Ưu đãi" value={form.discountType === "PERCENTAGE" ? `${form.discountValue}%` : money(form.discountValue)} />
                   <Info label="Đơn tối thiểu" value={money(form.minOrderAmount)} />
+                  <Info label="Ngân sách" value={form.budgetLimit == null ? "Không giới hạn" : money(form.budgetLimit)} />
+                  <Info label="Hiển thị" value={form.publicVisible ? "Công khai trên website" : "Mã riêng"} />
+                  <Info label="Kênh áp dụng" value={form.applicableChannels.map((channel) => channel === "ONLINE" ? "Online" : "Tại quầy").join(", ")} />
                   <Info label="Tổng lượt" value={form.totalUsageLimitType === "UNLIMITED" ? "Không giới hạn" : String(form.totalUsageLimit)} />
                   <Info label="Mỗi khách hàng" value={form.perCustomerUsageLimitType === "UNLIMITED" ? "Không giới hạn" : `${form.perCustomerUsageLimit} lượt`} />
                   {isBirthdayPromotion(form.type) && <Info label="Policy sinh nhật" value={`${form.birthdayRule} · năm ${yearOfInput(form.startAt)}`} />}
@@ -966,6 +1109,7 @@ export function PromotionManagementPage() {
                   <th className="px-4 py-3.5">Mã voucher</th>
                   <th className="px-4 py-3.5">Booking</th>
                   <th className="px-4 py-3.5">Khách hàng</th>
+                  <th className="px-4 py-3.5">Kênh bán</th>
                   <th className="px-4 py-3.5">Số tiền giảm</th>
                   <th className="px-4 py-3.5">Trạng thái</th>
                   <th className="px-4 py-3.5">Thời gian cập nhật</th>
@@ -974,7 +1118,7 @@ export function PromotionManagementPage() {
               <tbody className="divide-y divide-slate-200">
                 {usages.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-slate-500">Chưa có lịch sử sử dụng promotion.</td>
+                    <td colSpan={7} className="px-4 py-12 text-center text-slate-500">Chưa có lịch sử sử dụng promotion.</td>
                   </tr>
                 ) : usages.map((usage) => (
                   <tr key={usage.promotionUsageId} className="bg-white transition even:bg-slate-50/70 hover:bg-amber-50/50">
@@ -983,6 +1127,7 @@ export function PromotionManagementPage() {
                     </td>
                     <td className="px-4 py-3.5 font-bold tabular-nums text-slate-700">#{usage.bookingId}</td>
                     <td className="px-4 py-3.5 font-semibold text-slate-900">{usage.username}</td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-600">{usage.bookingChannel === "COUNTER" ? "Tại quầy" : "Online"}</td>
                     <td className="px-4 py-3.5 font-black tabular-nums text-emerald-700">−{money(usage.discountAmount)}</td>
                     <td className="px-4 py-3.5">
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${USAGE_STATUS_STYLES[usage.status]}`}>
@@ -1023,6 +1168,37 @@ function UsageStat({
     <div className={`rounded-2xl border px-4 py-3.5 ${tones[tone]}`}>
       <p className="text-xs font-black uppercase tracking-wider opacity-70">{label}</p>
       <p className="mt-1 text-2xl font-black tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+  tone: "slate" | "rose" | "emerald" | "amber";
+}) {
+  const tones = {
+    slate: "bg-slate-900 text-white",
+    rose: "bg-rose-50 text-rose-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+  };
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone]}`}>{icon}</span>
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      </div>
+      <p className="mt-3 text-xl font-black tabular-nums text-slate-950">{value}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500">{hint}</p>
     </div>
   );
 }

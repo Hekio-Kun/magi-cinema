@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PaymentMethod;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingChannel;
 
 @Data
 @Builder
@@ -25,5 +26,6 @@ public class PromotionValidationRequest {
     Integer orderAmount;
 
     PaymentMethod paymentMethod;
+    BookingChannel bookingChannel;
     String memberUserId;
 }

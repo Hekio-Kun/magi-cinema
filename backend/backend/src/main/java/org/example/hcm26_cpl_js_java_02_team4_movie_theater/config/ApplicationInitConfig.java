@@ -75,6 +75,7 @@ public class ApplicationInitConfig {
             migrateLegacyUserRole();
             cleanupLegacyPermissions();
             fixComboStatus();
+            fixGenreMetadata();
             fixLegacyFoodItemVisibility();
             migrateDefaultFoodVariants();
             fixFoodVariantStock();
@@ -267,6 +268,33 @@ public class ApplicationInitConfig {
             log.info("Fixed NULL combo status by setting to ACTIVE.");
         } catch (Exception e) {
             log.warn("Could not fix combo status: {}", e.getMessage());
+        }
+    }
+
+    private void fixGenreMetadata() {
+        try {
+            jdbcTemplate.update("UPDATE genre SET status = 'ACTIVE' WHERE status IS NULL");
+            jdbcTemplate.update("""
+                    UPDATE genre
+                    SET source = CASE
+                        WHEN LOWER(TRIM(COALESCE(description, ''))) = LOWER('Tự động tạo từ TMDB') THEN 'TMDB'
+                        ELSE 'MANUAL'
+                    END
+                    WHERE source IS NULL
+                    """);
+            jdbcTemplate.update("UPDATE genre SET color_code = '#E63946' WHERE color_code IS NULL OR color_code = ''");
+            jdbcTemplate.update("UPDATE genre SET display_order = 0 WHERE display_order IS NULL");
+            jdbcTemplate.update("""
+                    UPDATE genre
+                    SET slug = LOWER(TRIM(BOTH '-' FROM REGEXP_REPLACE(
+                        unaccent(REPLACE(REPLACE(name, 'Đ', 'D'), 'đ', 'd')),
+                        '[^A-Za-z0-9]+', '-', 'g'
+                    )))
+                    WHERE slug IS NULL OR slug = ''
+                    """);
+            log.info("Backfilled operational metadata for legacy genres.");
+        } catch (Exception e) {
+            log.warn("Could not backfill genre metadata: {}", e.getMessage());
         }
     }
 

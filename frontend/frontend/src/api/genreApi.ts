@@ -1,9 +1,14 @@
 import apiClient from './api';
-import { Genre, GenreRequest } from '@/types/genre';
+import { Genre, GenreRequest, GenreStatus } from '@/types/genre';
 
 export const genreService = {
   getAllGenres: async (): Promise<Genre[]> => {
     const response = await apiClient.get('/genres');
+    return response.data.result;
+  },
+
+  getAllGenresForAdmin: async (): Promise<Genre[]> => {
+    const response = await apiClient.get('/genres/admin');
     return response.data.result;
   },
 
@@ -19,6 +24,11 @@ export const genreService = {
 
   updateGenre: async (genreId: number, payload: GenreRequest): Promise<Genre> => {
     const response = await apiClient.put(`/genres/${genreId}`, payload);
+    return response.data.result;
+  },
+
+  updateStatus: async (genreId: number, status: GenreStatus): Promise<Genre> => {
+    const response = await apiClient.patch(`/genres/${genreId}/status`, { status });
     return response.data.result;
   },
 

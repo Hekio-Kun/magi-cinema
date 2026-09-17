@@ -29,6 +29,36 @@ public interface PromotionUsageRepository extends JpaRepository<PromotionUsage, 
             Long promotionId,
             Collection<PromotionUsageStatus> statuses);
 
+    @Query("""
+            SELECT COALESCE(SUM(usage.discountAmount), 0)
+            FROM PromotionUsage usage
+            WHERE usage.promotion.promotionId = :promotionId
+              AND usage.status IN :statuses
+            """)
+    long sumDiscountAmount(
+            @Param("promotionId") Long promotionId,
+            @Param("statuses") Collection<PromotionUsageStatus> statuses);
+
+    @Query("""
+            SELECT COALESCE(SUM(usage.originalAmount), 0)
+            FROM PromotionUsage usage
+            WHERE usage.promotion.promotionId = :promotionId
+              AND usage.status IN :statuses
+            """)
+    long sumOriginalAmount(
+            @Param("promotionId") Long promotionId,
+            @Param("statuses") Collection<PromotionUsageStatus> statuses);
+
+    @Query("""
+            SELECT COALESCE(SUM(usage.finalAmount), 0)
+            FROM PromotionUsage usage
+            WHERE usage.promotion.promotionId = :promotionId
+              AND usage.status IN :statuses
+            """)
+    long sumFinalAmount(
+            @Param("promotionId") Long promotionId,
+            @Param("statuses") Collection<PromotionUsageStatus> statuses);
+
     long countByPromotion_PromotionIdAndUser_UserIdAndStatusIn(
             Long promotionId,
             String userId,

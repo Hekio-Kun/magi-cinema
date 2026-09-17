@@ -6,12 +6,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.common.ApiResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionEvaluationResponse;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionAnalyticsResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionCatalogResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionUsageResponse;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion.PromotionValidationRequest;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PaymentMethod;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingChannel;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PromotionStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PromotionType;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.service.PromotionService;
@@ -94,9 +96,18 @@ public class PromotionController {
     @GetMapping("/available")
     public ApiResponse<List<PromotionEvaluationResponse>> getAvailablePromotions(
             @RequestParam Integer orderAmount,
-            @RequestParam(required = false) PaymentMethod paymentMethod) {
+            @RequestParam(required = false) PaymentMethod paymentMethod,
+            @RequestParam(required = false) BookingChannel bookingChannel) {
         return ApiResponse.<List<PromotionEvaluationResponse>>builder()
-                .result(promotionService.getAvailablePromotions(orderAmount, paymentMethod))
+                .result(promotionService.getAvailablePromotions(orderAmount, paymentMethod, bookingChannel))
+                .build();
+    }
+
+    @GetMapping("/admin/analytics")
+    @PreAuthorize("hasAuthority('PROMOTION_MANAGE')")
+    public ApiResponse<PromotionAnalyticsResponse> getAnalytics() {
+        return ApiResponse.<PromotionAnalyticsResponse>builder()
+                .result(promotionService.getAnalytics())
                 .build();
     }
 

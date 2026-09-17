@@ -1,50 +1,83 @@
-import { useState, useEffect, useMemo } from "react";
-import { 
-  MessageSquare, 
-  Mail, 
-  Calendar, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Eye, 
-  EyeOff, 
-  Search, 
-  Filter, 
-  Send, 
-  X, 
-  RefreshCw, 
-  ShieldAlert, 
-  Clock, 
-  MessageCircle,
-  Trash2
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Filter,
+  Inbox,
+  Mail,
+  MessageSquare,
+  RefreshCw,
+  Search,
+  Send,
+  ShieldAlert,
+  UserCheck,
+  X,
 } from "lucide-react";
-import { contactApi, ContactResponse } from "@/api/contactApi";
+import {
+  contactApi,
+  ContactAnalyticsResponse,
+  ContactCategory,
+  ContactPriority,
+  ContactResponse,
+  ContactStatus,
+} from "@/api/contactApi";
 import { getApiErrorMessage } from "@/api/errors";
 
-type ContactFilterStatus = "ALL" | "RECEIVED" | "REPLIED" | "FLAGGED";
+const STATUS_LABEL: Record<ContactStatus, string> = {
+  NEW: "Mới tiếp nhận",
+  IN_PROGRESS: "Đang xử lý",
+  WAITING_CUSTOMER: "Chờ khách hàng",
+  RESOLVED: "Đã giải quyết",
+  CLOSED: "Đã đóng",
+};
+const PRIORITY_LABEL: Record<ContactPriority, string> = { LOW: "Thấp", NORMAL: "Bình thường", HIGH: "Cao", URGENT: "Khẩn cấp" };
+const CATEGORY_LABEL: Record<ContactCategory, string> = {
+  SERVICE_QUALITY: "Dịch vụ & chất lượng",
+  BOOKING_PAYMENT: "Đặt vé & thanh toán",
+  STAFF_ATTITUDE: "Thái độ nhân viên",
+  PARTNERSHIP: "Hợp tác & quảng cáo",
+  MOVIE_SCHEDULE: "Phim & lịch chiếu",
+  OTHER: "Nội dung khác",
+};
+const EMPTY_ANALYTICS: ContactAnalyticsResponse = {
+  totalActive: 0,
+  newCount: 0,
+  inProgressCount: 0,
+  waitingCustomerCount: 0,
+  overdueCount: 0,
+  resolvedTodayCount: 0,
+  flaggedCount: 0,
+  averageFirstResponseMinutes: 0,
+};
 
 export function CustomerContactManagementPage() {
   const [contacts, setContacts] = useState<ContactResponse[]>([]);
+  const [analytics, setAnalytics] = useState<ContactAnalyticsResponse>(EMPTY_ANALYTICS);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<ContactFilterStatus>("ALL");
-
-  // State to track which cards are currently showing raw unmasked text
-  const [showRawTextMap, setShowRawTextMap] = useState<Record<number, boolean>>({});
-
-  // Reply modal state
-  const [replyingItem, setReplyingItem] = useState<ContactResponse | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<"ALL" | ContactStatus | "OVERDUE">("ALL");
+  const [priority, setPriority] = useState<"ALL" | ContactPriority>("ALL");
+  const [category, setCategory] = useState<"ALL" | ContactCategory>("ALL");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [rawIds, setRawIds] = useState<Set<number>>(new Set());
+  const [replying, setReplying] = useState<ContactResponse | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [submittingReply, setSubmittingReply] = useState(false);
-  const [replyError, setReplyError] = useState("");
-  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [resolveAfterReply, setResolveAfterReply] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const fetchContacts = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const data = await contactApi.getAdminList();
-      setContacts(data);
-    } catch (err) {
-      console.error("Failed to fetch contacts", err);
+      const [items, summary] = await Promise.all([contactApi.getAdminList(), contactApi.getAnalytics()]);
+      setContacts(items);
+      setAnalytics(summary);
+    } catch (error) {
+      setNotice({ type: "error", text: getApiErrorMessage(error, "Không thể tải hàng đợi góp ý.") });
     } finally {
       setLoading(false);
     }
@@ -52,439 +85,168 @@ export function CustomerContactManagementPage() {
 
   useEffect(() => {
     let active = true;
-    contactApi.getAdminList()
-      .then((data) => { if (active) setContacts(data); })
-      .catch((err) => { if (active) console.error("Failed to fetch contacts", err); })
+    Promise.all([contactApi.getAdminList(), contactApi.getAnalytics()])
+      .then(([items, summary]) => {
+        if (!active) return;
+        setContacts(items);
+        setAnalytics(summary);
+      })
+      .catch((error) => {
+        if (active) setNotice({ type: "error", text: getApiErrorMessage(error, "Không thể tải hàng đợi góp ý.") });
+      })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-
   useEffect(() => {
-    if (!notification) return;
-    const timer = window.setTimeout(() => setNotification(null), 4000);
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 4500);
     return () => window.clearTimeout(timer);
-  }, [notification]);
+  }, [notice]);
 
-  const toggleShowRawText = (id: number) => {
-    setShowRawTextMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  const filtered = useMemo(() => contacts.filter((item) => {
+    const needle = search.trim().toLowerCase();
+    const matchesSearch = !needle || [item.ticketCode, item.senderName, item.senderEmail, item.subject, item.message]
+      .some((value) => value?.toLowerCase().includes(needle));
+    const matchesStatus = status === "ALL" || (status === "OVERDUE" ? item.overdue : item.status === status);
+    return matchesSearch && matchesStatus && (priority === "ALL" || item.priority === priority) && (category === "ALL" || item.category === category);
+  }), [contacts, search, status, priority, category]);
+
+  const replaceContact = (updated: ContactResponse) => {
+    setContacts((current) => current.map((item) => item.contactId === updated.contactId ? updated : item));
   };
 
-  // Filtered lists and stats
-  const filteredContacts = useMemo(() => {
-    return contacts.filter((c) => {
-      const matchSearch = 
-        c.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.senderEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.message.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      if (!matchSearch) return false;
-      if (filterStatus === "RECEIVED") return c.status === "RECEIVED";
-      if (filterStatus === "REPLIED") return c.status === "REPLIED";
-      if (filterStatus === "FLAGGED") return !c.aiApproved || (c.badWords && c.badWords.length > 0);
-      return true;
-    });
-  }, [contacts, searchQuery, filterStatus]);
-
-  const stats = useMemo(() => {
-    const total = contacts.length;
-    const received = contacts.filter((c) => c.status === "RECEIVED").length;
-    const replied = contacts.filter((c) => c.status === "REPLIED").length;
-    const flagged = contacts.filter((c) => !c.aiApproved || (c.badWords && c.badWords.length > 0)).length;
-    return { total, received, replied, flagged };
-  }, [contacts]);
-
-  const handleOpenReplyModal = (item: ContactResponse) => {
-    setReplyingItem(item);
-    setReplyText(item.adminReply || "");
-    setReplyError("");
-  };
-
-  const handleCloseReplyModal = () => {
-    setReplyingItem(null);
-    setReplyText("");
-    setReplyError("");
-  };
-
-  const handleSendReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!replyingItem || !replyText.trim()) {
-      setReplyError("Vui lòng nhập nội dung phản hồi.");
-      return;
-    }
-    setSubmittingReply(true);
-    setReplyError("");
-
+  const updateContact = async (item: ContactResponse, data: Parameters<typeof contactApi.update>[1], message: string) => {
     try {
-      const updated = await contactApi.reply(replyingItem.contactId, replyText.trim());
-      setContacts((prev) => prev.map((item) => item.contactId === updated.contactId ? updated : item));
-      setNotification({ type: "success", text: `Đã gửi email phản hồi thành công đến ${replyingItem.senderEmail}!` });
-      handleCloseReplyModal();
-    } catch (err: unknown) {
-      setReplyError(getApiErrorMessage(err, "Lỗi khi gửi email phản hồi. Kiểm tra lại kết nối mail server."));
+      replaceContact(await contactApi.update(item.contactId, data));
+      setNotice({ type: "success", text: message });
+      const summary = await contactApi.getAnalytics();
+      setAnalytics(summary);
+    } catch (error) {
+      setNotice({ type: "error", text: getApiErrorMessage(error, "Không thể cập nhật yêu cầu.") });
+    }
+  };
+
+  const archiveContact = async (item: ContactResponse) => {
+    if (!window.confirm(`Lưu trữ yêu cầu ${item.ticketCode}? Bạn vẫn có thể giữ lịch sử để báo cáo.`)) return;
+    try {
+      await contactApi.archive(item.contactId);
+      setContacts((current) => current.filter((contact) => contact.contactId !== item.contactId));
+      setNotice({ type: "success", text: `Đã lưu trữ ${item.ticketCode}.` });
+      setAnalytics(await contactApi.getAnalytics());
+    } catch (error) {
+      setNotice({ type: "error", text: getApiErrorMessage(error, "Không thể lưu trữ yêu cầu.") });
+    }
+  };
+
+  const sendReply = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!replying || !replyText.trim()) return;
+    setSubmitting(true);
+    try {
+      const updated = await contactApi.reply(replying.contactId, replyText.trim(), resolveAfterReply);
+      replaceContact(updated);
+      setReplying(null);
+      setReplyText("");
+      setNotice({ type: "success", text: `Đã gửi phản hồi cho ${updated.senderEmail}.` });
+      setAnalytics(await contactApi.getAnalytics());
+    } catch (error) {
+      setNotice({ type: "error", text: getApiErrorMessage(error, "Không thể gửi email phản hồi.") });
     } finally {
-      setSubmittingReply(false);
-    }
-  };
-
-  const handleDeleteContact = async (contactId: number) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa góp ý này không? Hành động này không thể hoàn tác.")) {
-      return;
-    }
-    try {
-      await contactApi.delete(contactId);
-      setContacts((prev) => prev.filter((item) => item.contactId !== contactId));
-      setNotification({ type: "success", text: "Đã xóa góp ý thành công!" });
-    } catch (err: unknown) {
-      setNotification({ type: "error", text: getApiErrorMessage(err, "Lỗi khi xóa góp ý.") });
+      setSubmitting(false);
     }
   };
 
   return (
-    <div style={{ padding: "28px 32px", height: "100%", overflowY: "auto", background: "#F4F5F7", fontFamily: "Inter, sans-serif" }}>
-      {/* Header & Title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="h-full overflow-y-auto bg-slate-50 px-5 py-6 text-slate-900 md:px-8">
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#111827] tracking-tight flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md">
-              <MessageSquare size={22} />
-            </div>
-            <span>Quản lý Ý kiến & Góp ý Khách hàng</span>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Tiếp nhận, kiểm duyệt tự động từ vựng vi phạm và phản hồi trực tiếp qua Email Khách hàng
-          </p>
+          <h1 className="flex items-center gap-3 text-2xl font-black tracking-tight"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-amber-300"><MessageSquare size={22} /></span>Góp ý & phản hồi</h1>
+          <p className="mt-1 text-sm text-slate-500">Điều phối yêu cầu theo mức ưu tiên, SLA và lịch sử chăm sóc khách hàng.</p>
         </div>
-
-        <button
-          onClick={fetchContacts}
-          disabled={loading}
-          className="px-4 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold shadow-sm border border-gray-200 flex items-center gap-2 transition-all cursor-pointer border-none"
-          style={{ border: "1px solid #E5E7EB" }}
-        >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          <span>Làm mới dữ liệu</span>
-        </button>
+        <button onClick={() => void loadData()} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold shadow-sm hover:bg-slate-50"><RefreshCw size={15} className={loading ? "animate-spin" : ""} />Làm mới</button>
       </div>
 
-      {/* Toast Notification */}
-      {notification && (
-        <div className={`mb-6 p-4 rounded-xl shadow-md border flex items-center justify-between text-sm transition-all animate-fadeIn ${
-          notification.type === "success" 
-            ? "bg-emerald-50 border-emerald-300 text-emerald-800" 
-            : "bg-rose-50 border-rose-300 text-rose-800"
-        }`}>
-          <div className="flex items-center gap-2.5 font-medium">
-            <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
-            <span>{notification.text}</span>
-          </div>
-          <button onClick={() => setNotification(null)} className="text-gray-400 hover:text-gray-700 bg-transparent border-none cursor-pointer">
-            <X size={16} />
-          </button>
+      {notice && <div className={`mb-5 flex items-center justify-between rounded-xl border p-3.5 text-sm ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}><span className="flex items-center gap-2"><CheckCircle2 size={17} />{notice.text}</span><button onClick={() => setNotice(null)} className="border-0 bg-transparent"><X size={16} /></button></div>}
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <Metric label="Đang hoạt động" value={analytics.totalActive} icon={<Inbox size={19} />} tone="slate" />
+        <Metric label="Mới tiếp nhận" value={analytics.newCount} icon={<Mail size={19} />} tone="blue" />
+        <Metric label="Đang xử lý" value={analytics.inProgressCount} icon={<UserCheck size={19} />} tone="violet" />
+        <Metric label="Quá SLA" value={analytics.overdueCount} icon={<AlertTriangle size={19} />} tone="rose" />
+        <Metric label="Xử lý hôm nay" value={analytics.resolvedTodayCount} icon={<CheckCircle2 size={19} />} tone="emerald" />
+        <Metric label="Phản hồi đầu TB" value={Math.round(analytics.averageFirstResponseMinutes)} suffix=" phút" icon={<Clock3 size={19} />} tone="amber" />
+      </div>
+
+      <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_160px_210px]">
+          <label className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Mã ticket, khách hàng, email, nội dung..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-slate-500" /></label>
+          <FilterSelect value={status} onChange={(value) => setStatus(value as typeof status)} options={[['ALL','Mọi trạng thái'],['NEW','Mới tiếp nhận'],['IN_PROGRESS','Đang xử lý'],['WAITING_CUSTOMER','Chờ khách hàng'],['RESOLVED','Đã giải quyết'],['CLOSED','Đã đóng'],['OVERDUE','Quá SLA']]} />
+          <FilterSelect value={priority} onChange={(value) => setPriority(value as typeof priority)} options={[['ALL','Mọi ưu tiên'],['URGENT','Khẩn cấp'],['HIGH','Cao'],['NORMAL','Bình thường'],['LOW','Thấp']]} />
+          <FilterSelect value={category} onChange={(value) => setCategory(value as typeof category)} options={[['ALL','Mọi nhóm'], ...Object.entries(CATEGORY_LABEL)]} />
+        </div>
+        <p className="mt-3 flex items-center gap-1 text-xs text-slate-400"><Filter size={13} />Hiển thị {filtered.length}/{contacts.length} yêu cầu</p>
+      </div>
+
+      {loading ? <div className="py-20 text-center text-sm text-slate-500"><RefreshCw className="mx-auto mb-3 animate-spin" />Đang tải hàng đợi...</div> : filtered.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center text-slate-500"><Inbox size={40} className="mx-auto mb-3 text-slate-300" /><strong>Không có yêu cầu phù hợp</strong></div> : (
+        <div className="space-y-3">
+          {filtered.map((item) => <ContactCard key={item.contactId} item={item} expanded={expandedId === item.contactId} raw={rawIds.has(item.contactId)} onToggle={() => setExpandedId(expandedId === item.contactId ? null : item.contactId)} onToggleRaw={() => setRawIds((current) => { const next = new Set(current); if (next.has(item.contactId)) next.delete(item.contactId); else next.add(item.contactId); return next; })} onUpdate={updateContact} onReply={() => { setReplying(item); setReplyText(""); setResolveAfterReply(true); }} onArchive={() => void archiveContact(item)} />)}
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tổng số góp ý</p>
-            <p className="text-2xl font-extrabold text-gray-900 mt-1">{stats.total}</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <MessageCircle size={24} />
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Chờ phản hồi</p>
-            <p className="text-2xl font-extrabold text-amber-600 mt-1">{stats.received}</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-            <Clock size={24} />
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Đã gửi Email</p>
-            <p className="text-2xl font-extrabold text-emerald-600 mt-1">{stats.replied}</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <Mail size={24} />
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Từ vựng vi phạm (AI)</p>
-            <p className="text-2xl font-extrabold text-rose-600 mt-1">{stats.flagged}</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-            <ShieldAlert size={24} />
-          </div>
-        </div>
-      </div>
-
-      {/* Filters & Search bar */}
-      <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-xs mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center flex-wrap gap-2">
-          <span className="text-xs font-semibold text-gray-400 uppercase mr-1 flex items-center gap-1">
-            <Filter size={14} /> Trạng thái:
-          </span>
-          {[
-            { id: "ALL", label: "Tất cả", count: stats.total },
-            { id: "RECEIVED", label: "Chờ phản hồi", count: stats.received },
-            { id: "REPLIED", label: "Đã phản hồi", count: stats.replied },
-            { id: "FLAGGED", label: "⚠️ Có từ vi phạm", count: stats.flagged },
-          ].map((tab) => {
-            const active = filterStatus === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setFilterStatus(tab.id as ContactFilterStatus)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border-none ${
-                  active 
-                    ? "bg-slate-900 text-white shadow-xs" 
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {tab.label} ({tab.count})
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="relative w-full sm:w-72">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Tìm theo tên, email, chủ đề..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:border-slate-800 text-sm outline-none transition-all bg-gray-50/50"
-          />
-        </div>
-      </div>
-
-      {/* Contact Items List */}
-      {loading ? (
-        <div className="py-20 text-center text-gray-500">
-          <div className="w-8 h-8 border-3 border-gray-200 border-t-slate-800 rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm font-medium">Đang tải danh sách góp ý...</p>
-        </div>
-      ) : filteredContacts.length === 0 ? (
-        <div className="p-16 text-center bg-white rounded-2xl border border-gray-200 shadow-xs text-gray-500">
-          <MessageSquare size={44} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-base font-semibold text-gray-700">Chưa có ý kiến góp ý nào</p>
-          <p className="text-xs text-gray-400 mt-1">Không tìm thấy bản ghi nào khớp với điều kiện lọc hiện tại.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredContacts.map((item) => {
-            const hasBadWords = !item.aiApproved || (item.badWords && item.badWords.length > 0);
-            const isShowingRaw = showRawTextMap[item.contactId] || false;
-            const displayedText = isShowingRaw ? item.message : (item.maskedMessage || item.message);
-
-            return (
-              <div 
-                key={item.contactId} 
-                className="p-6 rounded-2xl bg-white border border-gray-200/90 shadow-xs hover:shadow-md transition-all flex flex-col gap-4"
-              >
-                {/* Header of Card */}
-                <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-gray-100">
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-11 h-11 rounded-full bg-slate-100 border border-gray-200 flex items-center justify-center font-bold text-slate-700 flex-shrink-0 text-base">
-                      {item.senderName ? item.senderName.charAt(0).toUpperCase() : "U"}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <h4 className="text-base font-bold text-gray-900">{item.senderName}</h4>
-                        <span className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-2.5 py-0.5 rounded-md font-mono">
-                          <Mail size={12} /> {item.senderEmail}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <Calendar size={13} /> {item.createdAt || "Vừa xong"}
-                        </span>
-                        <span>•</span>
-                        <span className="font-semibold text-slate-700 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md">
-                          Chủ đề: {item.subject}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {item.status === "REPLIED" ? (
-                      <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
-                        <CheckCircle2 size={13} /> Đã phản hồi Email
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold flex items-center gap-1.5">
-                        <Clock size={13} /> Chờ xử lý
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Message Body with clean optional reveal toggle */}
-                <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200">
-                  {hasBadWords && (
-                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-200 text-xs">
-                      <span className="font-semibold text-rose-600 flex items-center gap-1.5">
-                        <ShieldAlert size={14} /> Tin nhắn đã được tự động lọc từ ngữ vi phạm tiêu chuẩn
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleShowRawText(item.contactId)}
-                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-gray-100 text-gray-700 font-semibold shadow-2xs border border-gray-300 flex items-center gap-1.5 text-[11px] transition-colors cursor-pointer border-none"
-                        style={{ border: "1px solid #D1D5DB" }}
-                      >
-                        {isShowingRaw ? (
-                          <>
-                            <EyeOff size={13} className="text-rose-500" />
-                            <span>🔒 Ẩn từ vi phạm (***)</span>
-                          </>
-                        ) : (
-                          <>
-                            <Eye size={13} className="text-emerald-600" />
-                            <span>👁️ Hiển thị từ gốc</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">
-                    {displayedText}
-                  </div>
-                </div>
-
-                {/* Reply History or Action Footer */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                  <div className="flex-1">
-                    {item.status === "REPLIED" && item.adminReply ? (
-                      <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 text-xs text-gray-700">
-                        <div className="font-bold text-emerald-800 flex items-center gap-1.5 mb-1">
-                          <Mail size={13} className="text-emerald-600" />
-                          <span>Nội dung đã trả lời qua email ({item.repliedAt}):</span>
-                        </div>
-                        <p className="text-gray-800 italic bg-white/80 p-2.5 rounded-lg border border-emerald-100 mt-1">
-                          "{item.adminReply}"
-                        </p>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">
-                        * Có thể gửi trả lời trực tiếp đến email cá nhân của khách hàng bên cạnh.
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end flex-shrink-0 gap-2">
-                    <button
-                      onClick={() => handleOpenReplyModal(item)}
-                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-sm flex items-center gap-2 transition-all cursor-pointer border-none"
-                    >
-                      <Mail size={14} />
-                      <span>{item.status === "REPLIED" ? "📧 Gửi lại Email" : "📧 Gửi Email Phản hồi"}</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteContact(item.contactId)}
-                      className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold shadow-sm border border-rose-200 flex items-center gap-2 transition-all cursor-pointer"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Reply Modal */}
-      {replyingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-          <div className="w-full max-w-lg overflow-hidden bg-white rounded-2xl border border-gray-200 shadow-2xl transition-all">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Mail size={18} className="text-emerald-400" />
-                <h3 className="text-base font-bold">Gửi Email Phản Hồi Khách Hàng</h3>
-              </div>
-              <button onClick={handleCloseReplyModal} className="text-gray-400 hover:text-white bg-transparent border-none cursor-pointer">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSendReply} className="p-6 space-y-4">
-              <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-xs space-y-1.5 text-gray-600">
-                <div className="flex justify-between">
-                  <span className="font-semibold text-gray-500">Người nhận:</span>
-                  <span className="font-bold text-gray-900">{replyingItem.senderName} ({replyingItem.senderEmail})</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold text-gray-500">Chủ đề:</span>
-                  <span className="font-medium text-gray-800">Phản hồi ý kiến [{replyingItem.subject}]</span>
-                </div>
-              </div>
-
-              {replyError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                  <AlertTriangle size={15} className="flex-shrink-0" />
-                  <span>{replyError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Nội dung email phản hồi *
-                </label>
-                <textarea
-                  required
-                  rows={6}
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Kính chào Quý khách, Ban quản lý rạp Magi Cinema xin trân trọng phản hồi về ý kiến..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:border-slate-900 text-sm outline-none transition-all resize-none text-gray-800"
-                />
-                <p className="text-[11px] text-gray-400 mt-1 italic">
-                  * Email sẽ được gửi trực tiếp thông qua hệ thống Mail của rạp phim Magi Cinema đến trang thư của khách.
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseReplyModal}
-                  disabled={submittingReply}
-                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs transition-colors border-none cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingReply}
-                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-all disabled:opacity-50 border-none cursor-pointer"
-                >
-                  {submittingReply ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Đang gửi email...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send size={13} />
-                      <span>Gửi email ngay</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {replying && <ReplyModal item={replying} replyText={replyText} setReplyText={setReplyText} resolveAfterReply={resolveAfterReply} setResolveAfterReply={setResolveAfterReply} submitting={submitting} onClose={() => setReplying(null)} onSubmit={sendReply} />}
     </div>
   );
 }
+
+function ContactCard({ item, expanded, raw, onToggle, onToggleRaw, onUpdate, onReply, onArchive }: {
+  item: ContactResponse; expanded: boolean; raw: boolean; onToggle: () => void; onToggleRaw: () => void;
+  onUpdate: (item: ContactResponse, data: Parameters<typeof contactApi.update>[1], message: string) => Promise<void>;
+  onReply: () => void; onArchive: () => void;
+}) {
+  const [note, setNote] = useState(item.internalNote || "");
+  const hasFlag = !item.aiApproved || Boolean(item.badWords?.length);
+  return <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${item.overdue ? "border-rose-300" : "border-slate-200"}`}>
+    <div className="p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-black text-blue-700">{item.ticketCode}</span><PriorityBadge priority={item.priority} />{item.overdue && <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-black text-rose-700">QUÁ SLA</span>}{hasFlag && <span title="Nội dung đã được kiểm duyệt" className="text-rose-500"><ShieldAlert size={15} /></span>}</div>
+          <h3 className="mt-2 font-bold text-slate-900">{item.subject}</h3>
+          <p className="mt-1 text-xs text-slate-500"><strong className="text-slate-700">{item.senderName}</strong> · {item.senderEmail} · {item.createdAt}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={item.status} onChange={(e) => void onUpdate(item, { status: e.target.value as ContactStatus }, "Đã cập nhật trạng thái.")} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold outline-none">{Object.entries(STATUS_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+          {!item.assignedToName && <button onClick={() => void onUpdate(item, { assignToMe: true }, "Bạn đã nhận xử lý yêu cầu.")} className="flex items-center gap-1.5 rounded-xl border-0 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"><UserCheck size={14} />Nhận xử lý</button>}
+          <button onClick={onToggle} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500">{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 text-xs sm:grid-cols-3">
+        <Info label="Phân loại" value={CATEGORY_LABEL[item.category]} />
+        <Info label="Người phụ trách" value={item.assignedToName || "Chưa phân công"} />
+        <Info label="SLA" value={item.dueAt || "Chưa thiết lập"} alert={item.overdue} />
+      </div>
+    </div>
+    {expanded && <div className="border-t border-slate-200 bg-slate-50 p-5">
+      <div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="mb-2 flex items-center justify-between"><p className="text-xs font-black uppercase tracking-wide text-slate-500">Nội dung khách gửi</p>{hasFlag && <button onClick={onToggleRaw} className="border-0 bg-transparent text-[11px] font-bold text-blue-700">{raw ? "Ẩn nội dung gốc" : "Xem nội dung gốc"}</button>}</div><p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{raw ? item.message : item.maskedMessage || item.message}</p></div>
+          <div><p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Lịch sử phản hồi ({item.replies?.length || 0})</p>{item.replies?.length ? <div className="space-y-2">{item.replies.map((reply) => <div key={reply.replyId} className={`rounded-xl border p-3 ${reply.emailDelivered ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><div className={`mb-1 flex justify-between text-[11px] ${reply.emailDelivered ? "text-emerald-700" : "text-amber-700"}`}><strong>{reply.staffName || "Magi Cinema"}</strong><span>{reply.createdAt} · {reply.emailDelivered ? "Đã gửi email" : "Email fallback"}</span></div><p className="whitespace-pre-wrap text-sm text-slate-700">{reply.replyMessage}</p></div>)}</div> : <p className="rounded-xl border border-dashed border-slate-300 p-4 text-xs text-slate-400">Chưa có phản hồi nào được gửi.</p>}</div>
+        </div>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><label className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">Mức ưu tiên</label><select value={item.priority} onChange={(e) => void onUpdate(item, { priority: e.target.value as ContactPriority }, "Đã cập nhật ưu tiên và SLA.")} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none">{Object.entries(PRIORITY_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><label className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">Ghi chú nội bộ</label><textarea rows={4} maxLength={3000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Thông tin chỉ nhân viên nhìn thấy..." className="w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-slate-500" /><button onClick={() => void onUpdate(item, { internalNote: note }, "Đã lưu ghi chú nội bộ.")} className="mt-2 w-full rounded-xl border-0 bg-slate-800 px-3 py-2 text-xs font-bold text-white">Lưu ghi chú</button></div>
+          <button onClick={onReply} className="flex w-full items-center justify-center gap-2 rounded-xl border-0 bg-amber-400 px-4 py-3 text-xs font-black text-slate-950"><Mail size={15} />Gửi phản hồi qua email</button>
+          <button onClick={onArchive} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-rose-600"><Archive size={14} />Lưu trữ yêu cầu</button>
+        </div>
+      </div>
+    </div>}
+  </article>;
+}
+
+function ReplyModal({ item, replyText, setReplyText, resolveAfterReply, setResolveAfterReply, submitting, onClose, onSubmit }: { item: ContactResponse; replyText: string; setReplyText: (value: string) => void; resolveAfterReply: boolean; setResolveAfterReply: (value: boolean) => void; submitting: boolean; onClose: () => void; onSubmit: (event: React.FormEvent) => void }) {
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between bg-slate-950 px-6 py-4 text-white"><div><p className="font-bold">Phản hồi {item.ticketCode}</p><p className="mt-0.5 text-xs text-slate-400">Gửi tới {item.senderEmail}</p></div><button onClick={onClose} className="border-0 bg-transparent text-slate-400"><X size={18} /></button></div><form onSubmit={onSubmit} className="space-y-4 p-6"><textarea required maxLength={5000} rows={7} autoFocus value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Nhập câu trả lời rõ ràng, hướng xử lý và thông tin khách hàng cần biết..." className="w-full resize-none rounded-xl border border-slate-300 p-3.5 text-sm leading-6 outline-none focus:border-slate-700" /><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"><input type="checkbox" checked={resolveAfterReply} onChange={(e) => setResolveAfterReply(e.target.checked)} className="mt-0.5" /><span><strong className="block text-xs text-slate-800">Đánh dấu đã giải quyết sau khi gửi</strong><span className="text-[11px] text-slate-500">Bỏ chọn nếu vẫn cần theo dõi hoặc chờ thêm thông tin từ khách.</span></span></label><div className="flex justify-end gap-3 border-t border-slate-100 pt-4"><button type="button" onClick={onClose} className="rounded-xl border-0 bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600">Hủy</button><button disabled={submitting || !replyText.trim()} className="rounded-xl border-0 bg-slate-950 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50"><Send size={14} className="mr-2 inline" />{submitting ? "Đang gửi..." : "Gửi phản hồi"}</button></div></form></div></div>;
+}
+
+function Metric({ label, value, suffix = "", icon, tone }: { label: string; value: number; suffix?: string; icon: React.ReactNode; tone: string }) { const colors: Record<string, string> = { slate: "bg-slate-100 text-slate-700", blue: "bg-blue-50 text-blue-700", violet: "bg-violet-50 text-violet-700", rose: "bg-rose-50 text-rose-700", emerald: "bg-emerald-50 text-emerald-700", amber: "bg-amber-50 text-amber-700" }; return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${colors[tone]}`}>{icon}</div><p className="text-xl font-black">{value}{suffix}</p><p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p></div>; }
+function Info({ label, value, alert = false }: { label: string; value: string; alert?: boolean }) { return <div><span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</span><strong className={`mt-1 block ${alert ? "text-rose-600" : "text-slate-700"}`}>{value}</strong></div>; }
+function PriorityBadge({ priority }: { priority: ContactPriority }) { const styles: Record<ContactPriority, string> = { LOW: "bg-slate-100 text-slate-600", NORMAL: "bg-blue-50 text-blue-700", HIGH: "bg-orange-100 text-orange-700", URGENT: "bg-rose-100 text-rose-700" }; return <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${styles[priority]}`}>{PRIORITY_LABEL[priority]}</span>; }
+function FilterSelect({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: Array<[string, string]> }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold outline-none">{options.map(([option, label]) => <option key={option} value={option}>{label}</option>)}</select>; }

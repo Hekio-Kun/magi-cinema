@@ -44,6 +44,52 @@ public class PromotionSchemaMigrationConfig {
                     ALTER TABLE IF EXISTS promotion
                     ADD COLUMN IF NOT EXISTS per_customer_usage_limit_type varchar(20) DEFAULT 'UNLIMITED'
                     """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE IF EXISTS promotion
+                    ADD COLUMN IF NOT EXISTS budget_limit integer
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE IF EXISTS promotion
+                    ADD COLUMN IF NOT EXISTS public_visible boolean NOT NULL DEFAULT true
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE IF EXISTS promotion
+                    ADD COLUMN IF NOT EXISTS priority integer NOT NULL DEFAULT 0
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE IF EXISTS promotion
+                    ADD COLUMN IF NOT EXISTS terms_and_conditions varchar(2000)
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE IF EXISTS promotion
+                    ADD COLUMN IF NOT EXISTS online_enabled boolean NOT NULL DEFAULT true
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE IF EXISTS promotion
+                    ADD COLUMN IF NOT EXISTS counter_enabled boolean NOT NULL DEFAULT true
+                    """);
+            jdbcTemplate.update("""
+                    UPDATE promotion
+                    SET online_enabled = true,
+                        counter_enabled = false
+                    WHERE promotion_type = 'E_WALLET'
+                    """);
+
+            jdbcTemplate.execute("ALTER TABLE promotion DROP CONSTRAINT IF EXISTS ck_promotion_budget_limit");
+            jdbcTemplate.execute("ALTER TABLE promotion DROP CONSTRAINT IF EXISTS ck_promotion_priority");
+            jdbcTemplate.execute("ALTER TABLE promotion DROP CONSTRAINT IF EXISTS ck_promotion_channel");
+            jdbcTemplate.execute("""
+                    ALTER TABLE promotion
+                    ADD CONSTRAINT ck_promotion_budget_limit CHECK (budget_limit IS NULL OR budget_limit >= 1000)
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE promotion
+                    ADD CONSTRAINT ck_promotion_priority CHECK (priority BETWEEN 0 AND 100)
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE promotion
+                    ADD CONSTRAINT ck_promotion_channel CHECK (online_enabled OR counter_enabled)
+                    """);
 
             jdbcTemplate.execute("ALTER TABLE promotion DROP CONSTRAINT IF EXISTS ck_promotion_total_usage_limit");
             jdbcTemplate.execute("ALTER TABLE promotion DROP CONSTRAINT IF EXISTS ck_promotion_customer_usage_limit");
@@ -113,7 +159,7 @@ public class PromotionSchemaMigrationConfig {
                 + " DROP CONSTRAINT IF EXISTS " + targetConstraintName);
         jdbcTemplate.execute("ALTER TABLE " + tableName
                 + " ADD CONSTRAINT " + targetConstraintName
-                + " CHECK (promotion_type IN ('MEMBER_TIER', 'BIRTHDAY', 'LEAP_DAY_BIRTHDAY', 'E_WALLET'))");
+                + " CHECK (promotion_type IN ('GENERAL', 'MEMBER_TIER', 'BIRTHDAY', 'LEAP_DAY_BIRTHDAY', 'E_WALLET'))");
     }
 
     private void migrateBirthdayUsageHistory() {

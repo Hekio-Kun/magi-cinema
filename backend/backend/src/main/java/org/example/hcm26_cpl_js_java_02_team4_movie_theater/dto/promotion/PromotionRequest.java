@@ -1,6 +1,7 @@
 package org.example.hcm26_cpl_js_java_02_team4_movie_theater.dto.promotion;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -12,6 +13,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BirthdayRule;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingChannel;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.LeapDayPolicy;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PaymentMethod;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.PromotionDiscountType;
@@ -57,6 +59,25 @@ public class PromotionRequest {
 
     @Min(value = 0, message = "Giá trị đơn tối thiểu không được âm")
     Integer minOrderAmount;
+
+    @Min(value = 1000, message = "Ngân sách khuyến mãi phải từ 1.000 đồng")
+    Integer budgetLimit;
+
+    @Builder.Default
+    Boolean publicVisible = true;
+
+    @Min(value = 0, message = "Độ ưu tiên không được âm")
+    @Max(value = 100, message = "Độ ưu tiên tối đa là 100")
+    @Builder.Default
+    Integer priority = 0;
+
+    @Size(max = 2000, message = "Điều khoản áp dụng tối đa 2000 ký tự")
+    String termsAndConditions;
+
+    @NotNull(message = "Kênh áp dụng không được để trống")
+    @Size(min = 1, message = "Phải chọn ít nhất một kênh áp dụng")
+    @Builder.Default
+    Set<BookingChannel> applicableChannels = Set.of(BookingChannel.ONLINE, BookingChannel.COUNTER);
 
     @NotNull(message = "Thời gian bắt đầu không được để trống")
     LocalDateTime startAt;

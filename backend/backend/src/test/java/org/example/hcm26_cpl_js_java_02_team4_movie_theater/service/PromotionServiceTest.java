@@ -12,6 +12,7 @@ import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.User;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.UserMembership;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.UserProfile;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BirthdayRule;
+import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingChannel;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.BookingStatus;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.LeapDayPolicy;
 import org.example.hcm26_cpl_js_java_02_team4_movie_theater.entity.enums.MembershipStatus;
@@ -387,6 +388,68 @@ class PromotionServiceTest {
 
         assertEquals(80_000, response.getDiscountAmount());
         assertEquals(0, response.getFinalAmount());
+    }
+
+    @Test
+    void createsGeneralPromotionWithoutMembershipCondition() {
+        PromotionRequest request = validRequest(PromotionType.GENERAL);
+        when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> {
+            Promotion promotion = invocation.getArgument(0);
+            promotion.setPromotionId(1L);
+            return promotion;
+        });
+
+        var response = promotionService.createPromotion(request);
+
+        assertEquals(PromotionType.GENERAL, response.getType());
+        assertTrue(response.getEligibleMemberTiers().isEmpty());
+        verify(membershipPlanRepository, never()).findByCodeIgnoreCase(any());
+    }
+
+    @Test
+    void rejectsOrderWhenPromotionBudgetCannotCoverTheDiscount() {
+        Promotion promotion = activePromotion(PromotionType.E_WALLET);
+        promotion.setWalletPaymentMethod(PaymentMethod.MOMO);
+        promotion.setBudgetLimit(15_000);
+        mockEligibleValidation(promotion, profile);
+        when(promotionUsageRepository.sumDiscountAmount(
+                1L,
+                PromotionService.LIMITING_USAGE_STATUSES)).thenReturn(10_000L);
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> promotionService.validatePromotion(validationRequest(100_000, PaymentMethod.MOMO)));
+
+        assertEquals(ErrorCode.PROMOTION_USAGE_LIMIT_REACHED, exception.getErrorCode());
+        assertEquals(
+                "Ngân sách giảm giá của chương trình không còn đủ cho đơn hàng này.",
+                exception.getCustomMessage());
+    }
+
+    @Test
+    void rejectsPromotionOnDisabledBookingChannel() {
+        Promotion promotion = activePromotion(PromotionType.E_WALLET);
+        promotion.setOnlineEnabled(true);
+        promotion.setCounterEnabled(false);
+        mockValidation(promotion);
+        PromotionValidationRequest request = validationRequest(100_000, PaymentMethod.MOMO);
+        request.setBookingChannel(BookingChannel.COUNTER);
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> promotionService.validatePromotion(request));
+
+        assertEquals(ErrorCode.PROMOTION_NOT_APPLICABLE, exception.getErrorCode());
+        assertEquals("Promotion không áp dụng cho kênh bán vé tại quầy.", exception.getCustomMessage());
+    }
+
+    @Test
+    void hidesPrivatePromotionFromPublicCatalog() {
+        Promotion promotion = activePromotion(PromotionType.E_WALLET);
+        promotion.setPublicVisible(false);
+        when(promotionRepository.findAll()).thenReturn(List.of(promotion));
+
+        assertTrue(promotionService.getPromotionCatalog().isEmpty());
     }
 
     @Test
@@ -1116,7 +1179,7 @@ class PromotionServiceTest {
     }
 
     private PromotionRequest validRequest(PromotionType type) {
-        return PromotionRequest.builder()
+        PromotionRequest request = PromotionRequest.builder()
                 .name("Promotion")
                 .code("PROMO01")
                 .type(type)
@@ -1127,6 +1190,10 @@ class PromotionServiceTest {
                 .totalUsageLimitType(UsageLimitType.UNLIMITED)
                 .perCustomerUsageLimitType(UsageLimitType.UNLIMITED)
                 .build();
+        if (type == PromotionType.E_WALLET) {
+            request.setApplicableChannels(Set.of(BookingChannel.ONLINE));
+        }
+        return request;
     }
 
     private Promotion activePromotion(PromotionType type) {
